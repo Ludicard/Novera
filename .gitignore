@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+
+# Entorno y secretos
+.env
+
+# Datos del cliente: nunca subir los Excel reales
+*.xlsx
+*.xlsm
+*.xls
+!apps/**/fixtures/*.xlsx
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+backups/

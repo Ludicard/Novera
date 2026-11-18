@@ -1,0 +1,16 @@
+{% load novera %}
+{% if facturas %}
+<table>
+  <thead><tr><th>Factura</th><th>Cliente</th><th>Cobro</th><th class="num">Saldo</th></tr></thead>
+  <tbody>
+  {% for f in facturas %}
+    <tr>
+      <td><a href="{{ f.get_absolute_url }}">{{ f.numero }}</a></td>
+      <td>{{ f.cliente|default:"—" }}</td>
+      <td>{{ f.fecha_cobro|date:"d/m/Y" }}</td>
+      <td class="num">{{ f.saldo|dinero }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="tenue">{{ vacio }}</p>{% endif %}

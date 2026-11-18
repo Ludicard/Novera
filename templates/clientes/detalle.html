@@ -1,0 +1,50 @@
+{% extends "base.html" %}{% load novera %}
+{% block title %}{{ cliente }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <div>
+    <span class="tenue">{{ cliente.tipo_identificacion }} {{ cliente.identificacion }}</span>
+    <h1>{{ cliente.nombre }}</h1>
+  </div>
+  <div>
+    <a class="boton" href="{% url 'clientes:editar' cliente.pk %}">Editar</a>
+    <a class="boton primario" href="{% url 'facturas:nueva' %}?cliente={{ cliente.pk }}">+ Factura para este cliente</a>
+  </div>
+</div>
+<section class="kpis">
+  <div class="kpi"><span>Saldo pendiente</span><strong>{{ cliente.saldo|dinero }}</strong><small>{{ abiertas }} factura{{ abiertas|pluralize }} abierta{{ abiertas|pluralize }}</small></div>
+  <div class="kpi alerta"><span>Vencido</span><strong>{{ vencido|dinero }}</strong></div>
+  <div class="kpi"><span>Facturado histórico</span><strong>{{ cliente.facturado|dinero }}</strong></div>
+  <div class="kpi"><span>Cobrado histórico</span><strong>{{ cliente.cobrado|dinero }}</strong></div>
+</section>
+{% if cliente.email or cliente.telefono or cliente.direccion or cliente.notas %}
+<section class="tarjeta">
+  <dl class="datos">
+    {% if cliente.email %}<dt>Email</dt><dd>{{ cliente.email }}</dd>{% endif %}
+    {% if cliente.telefono %}<dt>Teléfono</dt><dd>{{ cliente.telefono }}</dd>{% endif %}
+    {% if cliente.direccion %}<dt>Dirección</dt><dd>{{ cliente.direccion }}</dd>{% endif %}
+    <dt>Crédito</dt><dd>{{ cliente.dias_credito }} días</dd>
+    {% if cliente.notas %}<dt>Notas</dt><dd class="pre">{{ cliente.notas }}</dd>{% endif %}
+  </dl>
+</section>
+{% endif %}
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista">
+  <thead><tr><th>Número</th><th>Periodo</th><th>Objeto</th><th>Cobro</th><th class="num">Total</th><th class="num">Saldo</th><th>Estado</th></tr></thead>
+  <tbody>
+  {% for f in facturas %}
+    <tr class="{% if f.anulada %}tachada{% endif %}">
+      <td><a href="{{ f.get_absolute_url }}">{{ f.numero }}</a></td>
+      <td>{{ f.periodo|date:"m/Y" }}</td>
+      <td class="recorte" title="{{ f.objeto }}">{{ f.objeto }}</td>
+      <td>{{ f.fecha_cobro|date:"d/m/Y" }}</td>
+      <td class="num">{{ f.total|dinero }}</td>
+      <td class="num">{% if f.anulada %}—{% else %}{{ f.saldo|dinero }}{% endif %}</td>
+      <td>{% estado f.estado %}</td>
+    </tr>
+  {% empty %}<tr><td colspan="7" class="tenue centro">Este cliente no tiene facturas.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

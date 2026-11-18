@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% load novera %}
+{% block title %}Inicio{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <h1>Cuentas por cobrar</h1>
+  <span class="tenue">{{ hoy|date:"l j \d\e F \d\e Y" }}</span>
+</div>
+
+{% if sin_datos %}
+<div class="tarjeta vacio">
+  <h2>Aún no hay facturas</h2>
+  <p>Registra la primera o trae todo el histórico desde el Excel.</p>
+  <a class="boton primario" href="{% url 'facturas:nueva' %}">Registrar factura</a>
+  <a class="boton" href="{% url 'facturas:importar' %}">Importar Excel</a>
+</div>
+{% else %}
+<section class="kpis">
+  <a class="kpi" href="{% url 'facturas:lista' %}?estado=ABIERTAS">
+    <span>Por cobrar</span><strong>{{ por_cobrar|dinero }}</strong><small>{{ num_por_cobrar }} factura{{ num_por_cobrar|pluralize }}</small>
+  </a>
+  <a class="kpi alerta" href="{% url 'facturas:lista' %}?estado=VENCIDA">
+    <span>Vencido</span><strong>{{ vencido|dinero }}</strong><small>{{ num_vencidas }} factura{{ num_vencidas|pluralize }}</small>
+  </a>
+  <div class="kpi">
+    <span>Cobrado este mes</span><strong>{{ cobrado_mes|dinero }}</strong><small>desde el 1 de {{ hoy|date:"F" }}</small>
+  </div>
+  <div class="kpi">
+    <span>Facturado {{ hoy|date:"F" }}</span><strong>{{ facturado_mes|dinero }}</strong><small>{{ num_facturado_mes }} factura{{ num_facturado_mes|pluralize }}</small>
+  </div>
+</section>
+
+<div class="rejilla">
+  <section class="tarjeta">
+    <h2>Vencidas más antiguas</h2>
+    {% include "facturas/_tabla_corta.html" with facturas=vencidas vacio="No hay facturas vencidas." %}
+  </section>
+  <section class="tarjeta">
+    <h2>Vencen en los próximos 7 días</h2>
+    {% include "facturas/_tabla_corta.html" with facturas=proximas vacio="Nada vence esta semana." %}
+  </section>
+  <section class="tarjeta ancha">
+    <h2>Saldo por cliente</h2>
+    {% if por_cliente %}
+    <table>
+      <thead><tr><th>Cliente</th><th class="num">Facturas</th><th class="num">Vencido</th><th class="num">Saldo</th></tr></thead>
+      <tbody>
+      {% for c in por_cliente %}
+        <tr>
+          <td>{% if c.id %}<a href="{% url 'clientes:detalle' c.id %}">{{ c.nombre }}</a>{% else %}{{ c.nombre }}{% endif %}</td>
+          <td class="num">{{ c.n }}</td>
+          <td class="num {% if c.vencido %}rojo{% endif %}">{{ c.vencido|dinero }}</td>
+          <td class="num"><strong>{{ c.saldo|dinero }}</strong></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="tenue">Todo cobrado.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

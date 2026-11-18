@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% load novera %}
+{% block title %}Vista previa de importación{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <div><span class="tenue">{{ original }}</span><h1>Vista previa de importación</h1></div>
+  <form method="post" class="acciones">
+    {% csrf_token %}
+    <button class="boton" name="accion" value="cancelar">Cancelar</button>
+    <button class="boton primario" name="accion" value="confirmar" {% if not resumen.filas %}disabled{% endif %}>Importar {{ resumen.filas }} documentos</button>
+  </form>
+</div>
+
+<section class="kpis">
+  <div class="kpi"><span>A importar</span><strong>{{ resumen.filas }}</strong><small>{{ resumen.clientes_nuevos }} clientes nuevos</small></div>
+  <div class="kpi"><span>Pagadas / pendientes / anuladas</span><strong>{{ resumen.pagadas }} / {{ resumen.pendientes }} / {{ resumen.anuladas }}</strong></div>
+  <div class="kpi"><span>Quedaría por cobrar</span><strong>{{ resumen.por_cobrar|dinero }}</strong></div>
+  <div class="kpi alerta"><span>Con avisos / omitidas</span><strong>{{ resumen.con_avisos }} / {{ resumen.omitidas }}</strong></div>
+</section>
+
+<label class="interruptor"><input type="checkbox" id="solo-avisos"> Mostrar solo filas con avisos</label>
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista" id="preview">
+  <thead><tr><th>Fila</th><th>Número</th><th>Periodo</th><th>Emisión</th><th>Cliente</th><th>Objeto</th>
+    <th class="num">Valor</th><th class="num">IVA</th><th class="num">Total</th><th>Queda</th><th>Avisos</th></tr></thead>
+  <tbody>
+  {% for f in resultado.filas %}
+    <tr class="{% if f.omitida %}omitida{% endif %}" data-avisos="{{ f.avisos|length }}">
+      <td>{{ f.fila }}</td><td>{{ f.numero|default:"—" }}</td><td>{{ f.periodo|date:"m/Y" }}</td>
+      <td>{{ f.fecha_emision|date:"d/m/Y" }}</td><td>{{ f.cliente|default:"—" }}</td>
+      <td class="recorte" title="{{ f.objeto }}">{{ f.objeto }}</td>
+      <td class="num">{{ f.subtotal|dinero }}</td><td class="num">{{ f.iva|dinero }} <small>{{ f.porcentaje_iva|floatformat:"-1" }}%</small></td>
+      <td class="num">{{ f.total|dinero }}</td>
+      <td>{% if f.omitida %}<span class="estado anulada">Omitida</span>{% else %}{{ f.accion|capfirst }}{% endif %}</td>
+      <td class="avisos">{{ f.avisos|join:" · " }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("solo-avisos").addEventListener("change", function (e) {
+  document.querySelectorAll("#preview tbody tr").forEach(function (tr) {
+    tr.hidden = e.target.checked && tr.dataset.avisos === "0";
+  });
+});
+</script>
+{% endblock %}

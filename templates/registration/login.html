@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Ingresar{% endblock %}
+{% block content %}
+<div class="login">
+  <h1>Novera</h1>
+  <p class="tenue">Gestión de facturas por cobrar</p>
+  <form method="post" class="tarjeta">
+    {% csrf_token %}
+    {% if form.errors %}<div class="mensaje error">Usuario o contraseña incorrectos.</div>{% endif %}
+    <label>Usuario {{ form.username }}</label>
+    <label>Contraseña {{ form.password }}</label>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="boton primario ancho">Ingresar</button>
+  </form>
+</div>
+{% endblock %}

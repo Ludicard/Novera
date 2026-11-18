@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Importar Excel{% endblock %}
+{% block content %}
+<div class="encabezado"><h1>Importar facturas desde Excel</h1></div>
+<div class="rejilla">
+  <form method="post" enctype="multipart/form-data" class="tarjeta formulario">
+    {% csrf_token %}
+    {% include "_campos.html" %}
+    <button class="boton primario">Analizar archivo</button>
+    <p class="tenue">Primero verás una vista previa. No se guarda nada hasta que confirmes.</p>
+  </form>
+  <section class="tarjeta">
+    <h2>¿Qué se importa?</h2>
+    <ul>
+      <li>La hoja <strong>Facturas</strong>: número, periodo, fecha, cliente, objeto, fecha de cobro, valor, IVA, total y estado.</li>
+      <li>El catálogo de clientes con RUC de la hoja <strong>Altas</strong>.</li>
+      <li>Las facturas marcadas como <em>Pagada</em> reciben un pago por el total; las <em>Anuladas</em> quedan anuladas.</li>
+      <li>Si el IVA está vacío se deduce del total (12 % en 2024, 15 % después).</li>
+      <li>Los clientes escritos de varias formas («Edificio Central» / «edf central») se unifican.</li>
+      <li>Las facturas que ya existen en Novera se saltan, así que puedes volver a importar sin duplicar.</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}

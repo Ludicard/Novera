@@ -1,0 +1,34 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Novera{% endblock %} · Novera</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="topbar">
+  <a class="marca" href="{% url 'dashboard' %}">Novera</a>
+  <nav>
+    {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
+    <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Inicio</a>
+    <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' and u != 'importar' %}class="activo"{% endif %}>Facturas</a>
+    <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
+    <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar Excel</a>
+    {% endwith %}
+  </nav>
+  <div class="usuario">
+    <a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>
+    {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="enlace">Salir</button></form>
+  </div>
+</header>
+{% endif %}
+<main class="contenedor">
+  {% for m in messages %}<div class="mensaje {{ m.tags }}">{{ m }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

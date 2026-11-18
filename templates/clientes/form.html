@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <h1>{{ titulo }}</h1>
+  <a href="{% if cliente %}{{ cliente.get_absolute_url }}{% else %}{% url 'clientes:lista' %}{% endif %}">Cancelar</a>
+</div>
+<form method="post" class="tarjeta formulario">
+  {% csrf_token %}
+  <div class="campos">{% include "_campos.html" %}</div>
+  <div class="acciones"><button class="boton primario">Guardar</button></div>
+</form>
+{% endblock %}

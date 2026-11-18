@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% load novera %}
+{% block title %}{{ factura.numero }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <div>
+    <span class="tenue">{{ factura.get_tipo_display }}</span>
+    <h1>{{ factura.numero }} {% estado factura.estado %}</h1>
+  </div>
+  {% if not factura.anulada %}<a class="boton" href="{% url 'facturas:editar' factura.pk %}">Editar</a>{% endif %}
+</div>
+
+<div class="rejilla">
+  <section class="tarjeta">
+    <dl class="datos">
+      <dt>Cliente</dt><dd>{% if factura.cliente %}<a href="{{ factura.cliente.get_absolute_url }}">{{ factura.cliente }}</a>{% else %}—{% endif %}</dd>
+      <dt>Objeto</dt><dd>{{ factura.objeto|default:"—" }}</dd>
+      <dt>Periodo</dt><dd>{{ factura.periodo|periodo }}</dd>
+      <dt>Emisión</dt><dd>{{ factura.fecha_emision|date:"d/m/Y" }}</dd>
+      <dt>Crédito</dt><dd>{{ factura.dias_credito }} días</dd>
+      <dt>Fecha de cobro</dt><dd>{{ factura.fecha_cobro|date:"d/m/Y"|default:"—" }}</dd>
+      {% if factura.notas %}<dt>Notas</dt><dd class="pre">{{ factura.notas }}</dd>{% endif %}
+      {% if factura.anulada %}<dt>Anulada</dt><dd>{{ factura.fecha_anulacion|date:"d/m/Y" }} · {{ factura.motivo_anulacion }}</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="tarjeta">
+    <dl class="datos montos">
+      <dt>Valor</dt><dd>{{ factura.subtotal|dinero }}</dd>
+      <dt>IVA ({{ factura.porcentaje_iva|floatformat:"-2" }} %)</dt><dd>{{ factura.iva|dinero }}</dd>
+      <dt>Total</dt><dd><strong>{{ factura.total|dinero }}</strong></dd>
+      <dt>Pagado</dt><dd>{{ factura.pagado|dinero }}</dd>
+      <dt>Saldo</dt><dd class="saldo">{% if factura.anulada %}—{% else %}{{ factura.saldo|dinero }}{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="tarjeta ancha">
+    <h2>Pagos y abonos</h2>
+    {% if pagos %}
+    <table>
+      <thead><tr><th>Fecha</th><th>Forma</th><th>Referencia</th><th>Notas</th><th class="num">Monto</th><th></th></tr></thead>
+      <tbody>
+      {% for p in pagos %}
+        <tr>
+          <td>{{ p.fecha|date:"d/m/Y" }}</td><td>{{ p.get_forma_display }}</td><td>{{ p.referencia|default:"—" }}</td>
+          <td>{{ p.notas }}</td><td class="num">{{ p.monto|dinero }}</td>
+          <td class="num">
+            <form method="post" action="{% url 'facturas:eliminar_pago' factura.pk p.pk %}" onsubmit="return confirm('¿Eliminar este pago?')">
+              {% csrf_token %}<button class="enlace rojo">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="tenue">Sin pagos registrados.</p>{% endif %}
+
+    {% if not factura.anulada and factura.saldo > 0 %}
+    <h3>Registrar pago</h3>
+    <form method="post" action="{% url 'facturas:registrar_pago' factura.pk %}" class="formulario en-linea">
+      {% csrf_token %}
+      {% with form=pago_form %}{% include "_campos.html" %}{% endwith %}
+      <button class="boton primario">Registrar pago</button>
+    </form>
+    {% endif %}
+  </section>
+
+  {% if not factura.anulada %}
+  <section class="tarjeta ancha peligro">
+    <details {% if anular_form.errors %}open{% endif %}>
+      <summary>Anular factura</summary>
+      {% if pagos %}<p class="tenue">Para anularla primero elimina sus pagos.</p>
+      {% else %}
+      <form method="post" action="{% url 'facturas:anular' factura.pk %}" class="formulario en-linea">
+        {% csrf_token %}
+        {% with form=anular_form %}{% include "_campos.html" %}{% endwith %}
+        <button class="boton peligro">Anular</button>
+      </form>
+      {% endif %}
+    </details>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

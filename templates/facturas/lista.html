@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load novera %}
+{% block title %}Facturas{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <h1>Facturas</h1>
+  <div>
+    <a class="boton" href="{% url 'facturas:exportar' %}?{{ filtros }}">Exportar a Excel</a>
+    <a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>
+  </div>
+</div>
+
+<form method="get" class="filtros tarjeta">
+  {% for campo in form %}<label>{{ campo.label }} {{ campo }}</label>{% endfor %}
+  <button class="boton">Filtrar</button>
+  {% if filtros %}<a href="{% url 'facturas:lista' %}">Limpiar</a>{% endif %}
+</form>
+
+<div class="totales">
+  <span>{{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}</span>
+  <span>Facturado <strong>{{ totales.total|dinero }}</strong></span>
+  <span>Cobrado <strong>{{ totales.pagado|dinero }}</strong></span>
+  <span>Saldo <strong>{{ totales.saldo|dinero }}</strong></span>
+</div>
+
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista">
+  <thead>
+    <tr><th>Número</th><th>Periodo</th><th>Emisión</th><th>Cliente</th><th>Objeto</th><th>Cobro</th>
+        <th class="num">Valor</th><th class="num">IVA</th><th class="num">Total</th><th class="num">Saldo</th><th>Estado</th></tr>
+  </thead>
+  <tbody>
+  {% for f in pagina %}
+    <tr class="{% if f.anulada %}tachada{% endif %}">
+      <td><a href="{{ f.get_absolute_url }}">{{ f.numero }}</a></td>
+      <td>{{ f.periodo|date:"m/Y" }}</td>
+      <td>{{ f.fecha_emision|date:"d/m/Y" }}</td>
+      <td>{% if f.cliente %}<a href="{{ f.cliente.get_absolute_url }}">{{ f.cliente }}</a>{% else %}—{% endif %}</td>
+      <td class="recorte" title="{{ f.objeto }}">{{ f.objeto }}</td>
+      <td>{{ f.fecha_cobro|date:"d/m/Y" }}</td>
+      <td class="num">{{ f.subtotal|dinero }}</td>
+      <td class="num">{{ f.iva|dinero }}</td>
+      <td class="num">{{ f.total|dinero }}</td>
+      <td class="num">{% if f.anulada %}—{% else %}{{ f.saldo|dinero }}{% endif %}</td>
+      <td>{% estado f.estado %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="11" class="tenue centro">No hay facturas con esos filtros.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% include "_paginacion.html" %}
+{% endblock %}
