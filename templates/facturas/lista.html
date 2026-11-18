@@ -17,9 +17,9 @@
 
 <div class="totales">
   <span>{{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}</span>
-  <span>Facturado <strong>{{ totales.total|dinero }}</strong></span>
-  <span>Cobrado <strong>{{ totales.pagado|dinero }}</strong></span>
-  <span>Saldo <strong>{{ totales.saldo|dinero }}</strong></span>
+  <span>Facturado <strong>{{ totales.suma_total|dinero }}</strong></span>
+  <span>Cobrado <strong>{{ totales.suma_pagado|dinero }}</strong></span>
+  <span>Saldo <strong>{{ totales.suma_saldo|dinero }}</strong></span>
 </div>
 
 <div class="tarjeta sin-relleno desplazable">

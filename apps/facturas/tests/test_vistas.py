@@ -44,6 +44,28 @@ class VistasTests(TestCase):
         for nombre in ["dashboard", "facturas:lista", "facturas:nueva", "facturas:importar", "clientes:lista", "clientes:nuevo"]:
             self.assertEqual(self.client.get(reverse(nombre)).status_code, 200, nombre)
 
+    def test_paginas_con_datos(self):
+        self.client.post(reverse("facturas:nueva"), self.datos_factura())
+        factura = Factura.objects.get()
+        self.client.post(
+            reverse("facturas:registrar_pago", args=[factura.pk]),
+            {"fecha": timezone.localdate().isoformat(), "forma": "TRANSFERENCIA", "monto": "50", "referencia": "", "notas": ""},
+        )
+        self.assertEqual(factura.pagos.count(), 1)
+        urls = [
+            reverse("dashboard"),
+            reverse("facturas:lista"),
+            reverse("facturas:lista") + "?estado=ABIERTAS&q=central",
+            reverse("facturas:lista") + f"?estado=PARCIAL&cliente={self.cliente.pk}",
+            reverse("facturas:detalle", args=[factura.pk]),
+            reverse("facturas:editar", args=[factura.pk]),
+            reverse("facturas:exportar"),
+            reverse("clientes:lista"),
+            reverse("clientes:detalle", args=[self.cliente.pk]),
+        ]
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
     def test_crear_factura_completa_numero_y_calcula(self):
         r = self.client.post(reverse("facturas:nueva"), self.datos_factura())
         f = Factura.objects.get()

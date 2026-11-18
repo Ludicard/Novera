@@ -93,7 +93,9 @@ def _filtrar(get):
 @login_required
 def lista(request):
     form, qs = _filtrar(request.GET)
-    totales = qs.filter(anulada=False).aggregate(total=Sum("total"), saldo=Sum("saldo"), pagado=Sum("pagado"))
+    totales = qs.filter(anulada=False).aggregate(
+        suma_total=Sum("total"), suma_saldo=Sum("saldo"), suma_pagado=Sum("pagado")
+    )
     pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
     filtros = request.GET.copy()
     filtros.pop("page", None)
