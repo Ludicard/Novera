@@ -28,7 +28,8 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured("Define DJANGO_SECRET_KEY (o DJANGO_DEBUG=1 en desarrollo).")
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+# localhost siempre: lo usa el healthcheck del contenedor (/salud/)
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS") + ["localhost", "127.0.0.1"]
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
@@ -123,6 +124,7 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", not TESTING)
+    SECURE_REDIRECT_EXEMPT = [r"^salud/$"]
     # Activa HSTS (p. ej. 31536000) solo cuando el dominio ya funcione bien con HTTPS.
     SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "0"))
 

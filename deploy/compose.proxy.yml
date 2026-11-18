@@ -1,0 +1,14 @@
+# Para un VPS que ya tiene Nginx Proxy Manager (u otro proxy) en la red Docker "proxy_network".
+# Se activa en .env con: COMPOSE_FILE=docker-compose.yml:deploy/compose.proxy.yml
+# En el proxy, el destino es  http://novera-web:8000
+services:
+  web:
+    networks:
+      default:
+      proxy:
+        aliases: [novera-web]
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-proxy_network}
+    external: true

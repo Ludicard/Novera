@@ -25,9 +25,17 @@ services:
         condition: service_healthy
     volumes:
       - media:/app/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/salud/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
 
+  # Solo si el VPS no tiene otro proxy en 80/443: COMPOSE_PROFILES=caddy en .env
   caddy:
     image: caddy:2-alpine
+    profiles: ["caddy"]
     restart: unless-stopped
     ports:
       - "80:80"

@@ -26,7 +26,7 @@ cada factura se calcula solo.
 | Aplicación | Python 3.13 · Django 5.2 |
 | Base de datos | PostgreSQL 17 (SQLite en desarrollo) |
 | Servidor | Gunicorn + WhiteNoise (estáticos) |
-| Proxy / HTTPS | Caddy 2 (certificado Let's Encrypt automático) |
+| Proxy / HTTPS | Nginx Proxy Manager existente, o Caddy 2 en un VPS limpio |
 | Despliegue | Docker Compose |
 
 ## Estructura
@@ -41,7 +41,7 @@ apps/facturas/
   management/commands/  `importar_excel` para importar desde la terminal
   tests/                Pruebas de modelos, importador y vistas
 templates/  static/     Interfaz (HTML + CSS + un poco de JS, sin build)
-deploy/                 Caddyfile, entrypoint y script de respaldos
+deploy/                 deploy.sh, compose.proxy.yml, Caddyfile, entrypoint y respaldos
 ```
 
 ## Desarrollo local
@@ -84,12 +84,22 @@ docker compose exec web python manage.py createsuperuser
 
 Listo: `https://TU_DOMINIO`. Las migraciones se aplican solas cada vez que arranca el contenedor.
 
-### Actualizar a una nueva versión
+**Si el VPS ya tiene Nginx Proxy Manager** en 80/443 (caso actual): en `.env` deja
+`COMPOSE_FILE=docker-compose.yml:deploy/compose.proxy.yml` (no se levanta Caddy y `web` se une a la red
+`proxy_network`). En NPM crea un *Proxy Host*: dominio → `http://novera-web:8000`, con SSL de Let's Encrypt
+y «Force SSL». Si el VPS está limpio, usa `COMPOSE_PROFILES=caddy` en su lugar.
 
-```bash
-git pull
-docker compose up -d --build
-```
+### Despliegue automático (push a `main`)
+
+`.github/workflows/ci.yml`: si las pruebas pasan, el job `deploy` entra por SSH como el usuario `novera`
+y el VPS ejecuta `/usr/local/bin/novera-deploy` → `git reset` a `origin/main` → `deploy/deploy.sh`
+(reconstruye, espera a que `/salud/` responda y limpia imágenes viejas). La llave de GitHub está limitada
+a ese comando (*forced command* en `authorized_keys`), no da una shell.
+
+Secretos del entorno `produccion` en GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+Variable opcional `NOVERA_URL` (ej. `https://novera.midominio.com`) para comprobar la web pública al final.
+
+A mano, en el VPS: `cd /opt/proyectos/Novera && ./deploy/deploy.sh`.
 
 ### Respaldos
 

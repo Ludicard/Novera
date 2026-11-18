@@ -30,6 +30,12 @@ class VistasTests(TestCase):
         datos.update(extra)
         return datos
 
+    def test_salud_sin_login(self):
+        self.client.logout()
+        r = self.client.get("/salud/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.content, b"ok")
+
     def test_requiere_login(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("dashboard")).status_code, 302)
