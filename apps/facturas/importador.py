@@ -1,6 +1,13 @@
-"""Importación del Excel histórico a Novera.
+"""Importación de facturas desde Excel a Novera.
 
-Lee la hoja "Facturas" (columnas: Numero de Factura, Periodo, Fecha, Tipo, Cliente, Objeto,
+Formatos reconocidos (se detectan solos):
+
+1. **Reporte de Factura de FactureroMovil** (formato principal): título en las primeras filas y
+   encabezados «Fecha de emision · No Factura · Clave de acceso · Base imponible IVA · … · Valor total ·
+   NID Cliente · Cliente · Estado · … · Cobrada · Info. adicional · Plazo …». De «Info. adicional» se
+   extraen dirección, email y teléfono del cliente y el «Mes del Servicio» (periodo).
+
+2. **Excel histórico** («Base Celeste»): lee la hoja "Facturas" (columnas: Numero de Factura, Periodo, Fecha, Tipo, Cliente, Objeto,
 Fecha Cobro, Valor, IVA, TOTAL, Estado) y el catálogo de clientes de la hoja "Altas".
 
 El Excel tiene datos muy heterogéneos, así que cada fila se normaliza y se anotan avisos:
@@ -45,6 +52,37 @@ TASAS_IVA = [Decimal("0"), Decimal("5"), Decimal("12"), Decimal("15")]
 PATRON_SRI = re.compile(r"^\d{3}-\d{3}-\d{9}$")
 PATRON_RECIBO = re.compile(r"^re[ci]{0,2}bo\s*0*(\d+)$", re.IGNORECASE)
 PREFIJOS_CLIENTE = {"edificio", "edf", "edif", "ed"}
+# «MEGA SANTAMARIA S.A.» y «Mega Santamaria» son el mismo cliente
+SUFIJOS_CLIENTE = {"s", "a", "sa", "cia", "ltda", "c", "ca", "cltda", "sas"}
+PATRON_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+# Reporte de Factura de FactureroMovil: encabezado normalizado -> campo
+COLUMNAS_FM = {
+    "fecha de emision": "fecha",
+    "no factura": "numero",
+    "clave de acceso": "clave_acceso",
+    "base imponible iva": "base_iva",
+    "base imponible 0%": "base_0",
+    "base imponible 5%": "base_5",
+    "base imponible 8%": "base_8",
+    "base imponible no iva": "base_no_iva",
+    "iva": "iva",
+    "iva 5%": "iva_5",
+    "iva 8%": "iva_8",
+    "ice": "ice",
+    "total descuento": "descuento",
+    "valor total": "total",
+    "nid cliente": "nid",
+    "cliente": "cliente",
+    "estado": "estado",
+    "por cobrar": "por_cobrar",
+    "saldo cobrar": "saldo_cobrar",
+    "cobrada": "cobrada",
+    "info. adicional": "info",
+    "info. adic": "info",
+    "plazo": "plazo",
+}
+SI = {"si", "s", "yes", "cobrada", "pagada"}
 
 COLUMNAS = {
     "numero de factura": "numero",
@@ -167,6 +205,8 @@ def clave_cliente(nombre):
     palabras = s.split()
     while palabras and palabras[0] in PREFIJOS_CLIENTE:
         palabras = palabras[1:]
+    while len(palabras) > 1 and palabras[-1] in SUFIJOS_CLIENTE:
+        palabras = palabras[:-1]
     return " ".join(palabras)
 
 
@@ -232,6 +272,14 @@ class FilaImportada:
     total: Decimal = Decimal("0.00")
     estado_origen: str = ""
     accion: str = "pendiente"  # pendiente | pagada | anulada
+    abonado: Decimal = Decimal("0.00")  # cobro parcial informado por FactureroMovil
+    dias_credito: int | None = None
+    clave_acceso: str = ""
+    identificacion: str = ""
+    email: str = ""
+    telefono: str = ""
+    direccion: str = ""
+    origen: str = "Excel"
     notas: list[str] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
     omitida: bool = False
@@ -242,6 +290,7 @@ class Resultado:
     filas: list[FilaImportada]
     catalogo: dict  # clave -> (nombre, identificacion)
     errores: list[str] = field(default_factory=list)
+    formato: str = "Excel histórico"
 
     @property
     def importables(self):
@@ -257,8 +306,20 @@ class Resultado:
 
     def resumen(self):
         filas = self.importables
-        existentes = {clave_cliente(n) for n in Cliente.objects.values_list("nombre", flat=True)}
-        claves_nuevas = ({f.clave for f in filas if f.clave} | set(self.catalogo)) - existentes
+        claves = set()
+        rucs = set()
+        for nombre, ruc in Cliente.objects.values_list("nombre", "identificacion"):
+            claves.add(clave_cliente(nombre))
+            rucs.add(ruc)
+        nuevos = set()
+        for f in filas:
+            if (f.identificacion and f.identificacion in rucs) or (f.clave and f.clave in claves):
+                continue
+            if f.clave or f.identificacion:
+                nuevos.add(f.identificacion or f.clave)
+                rucs.add(f.identificacion)
+                claves.add(f.clave)
+        claves_nuevas = nuevos | (set(self.catalogo) - claves)
         return {
             "filas": len(filas),
             "omitidas": len(self.omitidas),
@@ -266,8 +327,10 @@ class Resultado:
             "pagadas": sum(1 for f in filas if f.accion == "pagada"),
             "pendientes": sum(1 for f in filas if f.accion == "pendiente"),
             "anuladas": sum(1 for f in filas if f.accion == "anulada"),
-            "por_cobrar": sum((f.total for f in filas if f.accion == "pendiente"), Decimal("0")),
+            "por_cobrar": sum((f.total - f.abonado for f in filas if f.accion == "pendiente"), Decimal("0")),
+            "facturado": sum((f.total for f in filas if f.accion != "anulada"), Decimal("0")),
             "clientes_nuevos": len(claves_nuevas),
+            "formato": self.formato,
         }
 
 
@@ -301,12 +364,197 @@ def _leer_catalogo(wb):
 
 
 def analizar(origen, estado_desconocido="pendiente"):
-    """Lee el Excel y devuelve un Resultado sin escribir nada en la base de datos."""
+    """Lee el Excel (detecta el formato) y devuelve un Resultado sin escribir en la base de datos."""
     wb = openpyxl.load_workbook(origen, data_only=True)
+    facturero = _detectar_facturero(wb)
+    if facturero:
+        return _analizar_facturero(*facturero, estado_desconocido=estado_desconocido)
     ws = _buscar_hoja(wb, "facturas")
     if ws is None:
-        return Resultado(filas=[], catalogo={}, errores=["El archivo no tiene una hoja llamada «Facturas»."])
+        return Resultado(
+            filas=[],
+            catalogo={},
+            errores=[
+                "No se reconoce el formato. Sube el «Reporte de Factura» descargado de FactureroMovil "
+                "(o el Excel histórico con la hoja «Facturas»)."
+            ],
+        )
+    return _analizar_historico(wb, ws, estado_desconocido)
 
+
+# ---------------------------------------------------------------- FactureroMovil
+
+
+def _encabezado(valores):
+    return [_sin_tildes(texto(c).lower()) for c in valores]
+
+
+def _detectar_facturero(wb):
+    """Busca la fila de encabezados del Reporte de Factura en las primeras filas de cada hoja."""
+    for ws in wb.worksheets:
+        for n, valores in enumerate(ws.iter_rows(min_row=1, max_row=20, values_only=True), start=1):
+            encabezado = _encabezado(valores)
+            if "no factura" in encabezado and "valor total" in encabezado:
+                cols = {}
+                for i, h in enumerate(encabezado):
+                    if h in COLUMNAS_FM and COLUMNAS_FM[h] not in cols:
+                        cols[COLUMNAS_FM[h]] = i
+                return ws, n, cols
+    return None
+
+
+def _nombra_un_mes(valor):
+    s = _sin_tildes(texto(valor).lower())
+    return any(re.search(rf"\b{nombre}\b", s) for nombre in MESES)
+
+
+def _leer_info_adicional(info):
+    """«Dirección: X | Email: a@b | Mes del Servicio: Enero | …» -> dict de datos y lista de extras."""
+    datos = {"direccion": "", "email": "", "telefono": "", "mes": ""}
+    extras = []
+    for parte in texto(info).split("|"):
+        if ":" not in parte:
+            if parte.strip():
+                extras.append(parte.strip())
+            continue
+        clave, valor = (x.strip() for x in parte.split(":", 1))
+        compacta = re.sub(r"[^a-z]", "", _sin_tildes(clave.lower()))
+        if not valor:
+            continue
+        if compacta == "direccion":
+            datos["direccion"] = valor[:255]
+        elif compacta in {"email", "correo", "observaciones"} and PATRON_EMAIL.search(valor):
+            if not datos["email"]:
+                datos["email"] = PATRON_EMAIL.search(valor).group(0)[:254]
+        elif compacta.startswith("telefono"):
+            datos["telefono"] = valor[:30]
+        elif compacta.startswith("proveedor"):
+            continue
+        else:
+            # «Mes del Servicio», con sus erratas («Mes ddel Servicio», «Me s del Servicio», …)
+            if compacta.startswith("mes") and not datos["mes"] and _nombra_un_mes(valor):
+                datos["mes"] = valor
+            extras.append(f"{clave}: {valor}")
+    return datos, extras
+
+
+def _analizar_facturero(ws, fila_encabezado, cols, estado_desconocido="pendiente"):
+    faltan = {"numero", "fecha", "cliente", "total"} - set(cols)
+    if faltan:
+        return Resultado(
+            filas=[], catalogo={}, formato="FactureroMovil",
+            errores=[f"Al reporte de FactureroMovil le faltan columnas: {', '.join(sorted(faltan))}"],
+        )
+
+    existentes = set(Factura.objects.values_list("numero", flat=True))
+    vistos = set()
+    filas = []
+    for n, valores in enumerate(ws.iter_rows(min_row=fila_encabezado + 1, values_only=True), start=fila_encabezado + 1):
+        def v(campo):
+            i = cols.get(campo)
+            return valores[i] if i is not None and i < len(valores) else None
+
+        if all(x is None or texto(x) == "" for x in valores):
+            continue
+        fila = FilaImportada(fila=n, origen="FactureroMovil")
+        numero, tipo, estandar = normalizar_numero(v("numero"))
+        if not numero:
+            continue  # filas de totales o notas al pie
+        filas.append(fila)
+        fila.numero, fila.tipo = numero, tipo
+        if not estandar:
+            fila.avisos.append("Número con formato no estándar")
+        fila.clave_acceso = re.sub(r"\D", "", texto(v("clave_acceso")))[:49]
+
+        fila.fecha_emision = a_fecha(v("fecha"))
+        if not fila.fecha_emision:
+            fila.omitida = True
+            fila.avisos.append("Sin fecha de emisión")
+            continue
+
+        # Estado en el SRI
+        fila.estado_origen = texto(v("estado"))
+        estado = _sin_tildes(fila.estado_origen.lower())
+        if "anulad" in estado:
+            fila.accion = "anulada"
+        elif estado and ("no autoriz" in estado or "autoriz" not in estado):
+            fila.omitida = True
+            fila.avisos.append(f"Estado «{fila.estado_origen}»: no está autorizada por el SRI")
+            continue
+
+        # Cliente y datos de contacto
+        fila.cliente = nombre_presentable(v("cliente"))
+        fila.clave = clave_cliente(fila.cliente)
+        fila.identificacion = normalizar_identificacion(v("nid"))
+        if not fila.cliente:
+            fila.avisos.append("Sin cliente")
+        info, extras = _leer_info_adicional(v("info"))
+        fila.direccion, fila.email, fila.telefono = info["direccion"], info["email"], info["telefono"]
+        fila.objeto = " | ".join(extras)[:255]
+        fila.periodo = a_periodo(info["mes"] or None, fila.fecha_emision)
+
+        plazo = a_decimal(v("plazo"))
+        if plazo and plazo > 0:
+            fila.dias_credito = int(plazo)
+
+        # Montos
+        def suma(*campos):
+            return redondear(sum((a_decimal(v(c)) or Decimal("0")) for c in campos))
+
+        fila.subtotal = suma("base_iva", "base_0", "base_5", "base_8", "base_no_iva")
+        fila.iva = suma("iva", "iva_5", "iva_8")
+        total = a_decimal(v("total"))
+        fila.total = total if total is not None else redondear(fila.subtotal + fila.iva + suma("ice"))
+        base_iva, base_5, base_8 = (a_decimal(v(c)) or Decimal("0") for c in ("base_iva", "base_5", "base_8"))
+        if base_iva:
+            fila.porcentaje_iva = _tasa_cercana(a_decimal(v("iva")) or Decimal("0"), base_iva)
+        elif base_5:
+            fila.porcentaje_iva = Decimal("5")
+        elif base_8:
+            fila.porcentaje_iva = Decimal("8")
+        else:
+            fila.porcentaje_iva = Decimal("0")
+        if sum(1 for b in (base_iva, base_5, base_8, suma("base_0", "base_no_iva")) if b) > 1:
+            fila.avisos.append("Combina varias tarifas de IVA")
+        esperado = redondear(fila.subtotal + fila.iva + suma("ice"))
+        if abs(fila.total - esperado) > Decimal("0.02"):
+            fila.avisos.append(f"El valor total ({fila.total}) no coincide con bases + IVA ({esperado})")
+        if fila.total <= 0 and fila.accion != "anulada":
+            fila.omitida = True
+            fila.avisos.append("Valor total en cero")
+            continue
+
+        # Cobro: FactureroMovil solo lo informa si se usa su módulo de cuentas por cobrar
+        if fila.accion != "anulada":
+            cobrada = _sin_tildes(texto(v("cobrada")).lower())
+            por_cobrar = _sin_tildes(texto(v("por_cobrar")).lower())
+            saldo = a_decimal(v("saldo_cobrar"))
+            if cobrada in SI:
+                fila.accion = "pagada"
+            elif por_cobrar in SI:
+                fila.accion = "pendiente"
+                if saldo is not None and Decimal("0") < saldo < fila.total:
+                    fila.abonado = redondear(fila.total - saldo)
+            else:
+                fila.accion = estado_desconocido
+
+        if fila.numero in existentes:
+            fila.omitida = True
+            fila.avisos.append("Ya existe en Novera")
+        elif fila.numero in vistos:
+            fila.omitida = True
+            fila.avisos.append("Repetida en el archivo")
+        vistos.add(fila.numero)
+
+    if not filas:
+        return Resultado(filas=[], catalogo={}, formato="FactureroMovil", errores=["El reporte no tiene facturas."])
+    return Resultado(filas=filas, catalogo={}, formato="FactureroMovil")
+
+
+# ---------------------------------------------------------------- Excel histórico
+
+
+def _analizar_historico(wb, ws, estado_desconocido):
     encabezado = [_sin_tildes(texto(c.value).lower()) for c in ws[1]]
     cols = {COLUMNAS[h]: i for i, h in enumerate(encabezado) if h in COLUMNAS}
     faltan = {"numero", "cliente", "valor", "total"} - set(cols)
@@ -419,57 +667,77 @@ def analizar(origen, estado_desconocido="pendiente"):
 @transaction.atomic
 def aplicar(resultado, usuario=None, dias_credito=30):
     """Crea clientes, facturas y pagos. Devuelve un dict con lo creado."""
-    clientes = {clave_cliente(c.nombre): c for c in Cliente.objects.all()}
+    todos = list(Cliente.objects.all())
+    por_clave = {clave_cliente(c.nombre): c for c in todos}
+    por_ruc = {c.identificacion: c for c in todos if c.identificacion}
     creados = {"clientes": 0, "facturas": 0, "pagos": 0}
 
-    def obtener_cliente(clave, nombre, identificacion=""):
-        if not clave:
+    def obtener_cliente(clave, nombre, identificacion="", email="", telefono="", direccion=""):
+        if not clave and not identificacion:
             return None
-        cliente = clientes.get(clave)
+        cliente = por_ruc.get(identificacion) if identificacion else None
+        cliente = cliente or por_clave.get(clave)
         if cliente is None:
             cliente = Cliente.objects.create(
-                nombre=nombre[:200], identificacion=identificacion, dias_credito=dias_credito
+                nombre=nombre[:200], identificacion=identificacion, email=email, telefono=telefono,
+                direccion=direccion, dias_credito=dias_credito,
             )
-            clientes[clave] = cliente
             creados["clientes"] += 1
-        elif identificacion and not cliente.identificacion:
-            cliente.identificacion = identificacion
-            cliente.save(update_fields=["identificacion"])
+        else:
+            cambios = []
+            for campo, valor in (
+                ("identificacion", identificacion), ("email", email), ("telefono", telefono), ("direccion", direccion)
+            ):
+                if valor and not getattr(cliente, campo):
+                    setattr(cliente, campo, valor)
+                    cambios.append(campo)
+            if cambios:
+                cliente.save(update_fields=cambios)
+        por_clave.setdefault(clave, cliente)
+        if cliente.identificacion:
+            por_ruc.setdefault(cliente.identificacion, cliente)
         return cliente
 
     for clave, (nombre, ruc) in resultado.catalogo.items():
         obtener_cliente(clave, nombre, ruc)
 
     for fila in resultado.importables:
+        cliente = obtener_cliente(
+            fila.clave, fila.cliente, fila.identificacion, fila.email, fila.telefono, fila.direccion
+        )
+        dias = fila.dias_credito if fila.dias_credito is not None else (cliente.dias_credito if cliente else dias_credito)
+        anulada = fila.accion == "anulada"
         factura = Factura.objects.create(
             numero=fila.numero[:40],
             tipo=fila.tipo,
-            cliente=obtener_cliente(fila.clave, fila.cliente),
+            cliente=cliente,
             periodo=fila.periodo,
             fecha_emision=fila.fecha_emision,
-            dias_credito=dias_credito,
+            dias_credito=dias,
             fecha_cobro=fila.fecha_cobro,
             objeto=fila.objeto,
             subtotal=fila.subtotal,
             porcentaje_iva=fila.porcentaje_iva,
             iva=fila.iva,
             total=fila.total,
-            anulada=fila.accion == "anulada",
-            fecha_anulacion=fila.fecha_emision if fila.accion == "anulada" else None,
-            motivo_anulacion="Anulada en el Excel" if fila.accion == "anulada" else "",
-            notas="\n".join(fila.notas + [f"Importada de la fila {fila.fila} del Excel."]),
+            clave_acceso=fila.clave_acceso,
+            anulada=anulada,
+            fecha_anulacion=fila.fecha_emision if anulada else None,
+            motivo_anulacion=f"Anulada en {fila.origen}" if anulada else "",
+            notas="\n".join(fila.notas + [f"Importada de la fila {fila.fila} ({fila.origen})."]),
             importada=True,
             creado_por=usuario,
         )
         creados["facturas"] += 1
-        if fila.accion == "pagada" and factura.total > 0:
+        monto = factura.total if fila.accion == "pagada" else fila.abonado
+        if monto > 0 and not anulada:
             Pago.objects.create(
                 factura=factura,
-                fecha=fila.fecha_cobro or fila.fecha_emision,
+                fecha=(fila.fecha_cobro or fila.fecha_emision) if fila.origen == "Excel" else fila.fecha_emision,
                 forma=Pago.Forma.OTRO,
-                referencia="Migración Excel",
-                monto=factura.total,
-                notas=f"Marcada como «{fila.estado_origen or 'pagada'}» en el Excel",
+                referencia=f"Importación {fila.origen}",
+                monto=monto,
+                notas=f"Estado al importar: «{fila.estado_origen or fila.accion}»",
                 creado_por=usuario,
             )
             creados["pagos"] += 1

@@ -129,3 +129,56 @@ class VistasTests(TestCase):
             r = self.client.post(reverse("facturas:importar"), {"accion": "confirmar"})
             self.assertRedirects(r, reverse("facturas:lista"))
         self.assertEqual(Factura.objects.get().cliente, self.cliente)
+
+
+class PanelTests(TestCase):
+    def setUp(self):
+        from datetime import date
+        self.user = User.objects.create_user("usuario", password="clave-segura-123")
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(nombre="Edificio Central")
+        self.hoy = date(2025, 6, 15)
+        def factura(numero, emision, total, dias=30):
+            return Factura.objects.create(
+                numero=numero, cliente=self.cliente, periodo=emision, fecha_emision=emision,
+                dias_credito=dias, subtotal=total, porcentaje_iva=0, iva=0, total=total,
+            )
+        self.f1 = factura("001-001-000000001", date(2025, 1, 10), Decimal("100.00"))  # vencida > 90
+        self.f2 = factura("001-001-000000002", date(2025, 6, 1), Decimal("200.00"))   # por vencer
+        self.f3 = factura("001-001-000000003", date(2025, 5, 2), Decimal("50.00"))    # pagada
+        Pago.objects.create(factura=self.f3, fecha=date(2025, 5, 12), monto=Decimal("50.00"))
+        factura("001-001-000000004", date(2024, 12, 1), Decimal("999.00"))           # fuera del año
+
+    def test_datos_del_panel(self):
+        from django.http import QueryDict
+        from apps.facturas.dashboard import datos_panel
+        d = datos_panel(QueryDict("periodo=anio"), self.hoy)
+        k = d["kpis"]
+        self.assertEqual(k["facturado"], Decimal("350.00"))
+        self.assertEqual(k["cobrado"], Decimal("50.00"))
+        self.assertEqual(k["por_cobrar"], Decimal("300.00"))
+        self.assertEqual(k["vencido"], Decimal("100.00"))
+        self.assertEqual(k["tasa_cobro"], 14)
+        self.assertEqual(k["dias_cobro"], 10)
+        tramos = {t["tramo"]: t["monto"] for t in d["graficos"]["tramos"]}
+        self.assertEqual(tramos["Por vencer"], 200.0)
+        self.assertEqual(tramos["Más de 90"], 100.0)
+        self.assertEqual(len(d["mensual"]), 6)
+        self.assertEqual(d["mensual"][4]["cobrado"], 50.0)  # mayo
+        self.assertIn("emitida_desde=2025-01-01", d["filtro_lista"])
+
+    def test_panel_responde_con_filtros(self):
+        for q in ["", "?periodo=mes", "?periodo=todo", "?periodo=anio_anterior",
+                  f"?periodo=rango&desde=2025-01-01&hasta=2025-03-31&cliente={self.cliente.pk}", "?periodo=raro"]:
+            r = self.client.get(reverse("dashboard") + q)
+            self.assertEqual(r.status_code, 200, q)
+            self.assertContains(r, 'id="datos-panel"')
+
+    def test_panel_vacio(self):
+        Pago.objects.all().delete()
+        Factura.objects.all().delete()
+        self.assertContains(self.client.get(reverse("dashboard")), "Importar de FactureroMovil")
+
+    def test_lista_filtra_por_emision(self):
+        r = self.client.get(reverse("facturas:lista") + "?emitida_desde=2025-05-01&emitida_hasta=2025-06-30")
+        self.assertEqual(r.context["pagina"].paginator.count, 2)

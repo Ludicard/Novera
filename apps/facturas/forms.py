@@ -125,6 +125,8 @@ class FiltroFacturasForm(forms.Form):
     cliente = forms.ModelChoiceField(required=False, queryset=Cliente.objects.all(), empty_label="Todos")
     desde = forms.DateField(required=False, label="Periodo desde", widget=MES, input_formats=["%Y-%m"])
     hasta = forms.DateField(required=False, label="hasta", widget=MES, input_formats=["%Y-%m"])
+    emitida_desde = forms.DateField(required=False, label="Emitida desde", widget=FECHA)
+    emitida_hasta = forms.DateField(required=False, label="hasta", widget=FECHA)
 
 
 class ImportarForm(forms.Form):
@@ -133,7 +135,9 @@ class ImportarForm(forms.Form):
         widget=forms.ClearableFileInput(attrs={"accept": ".xlsx,.xlsm"}),
     )
     estado_desconocido = forms.ChoiceField(
-        label="Facturas cuyo estado en el Excel es «#REF!» o está vacío",
+        label="Facturas sin estado de cobro en el archivo",
+        help_text="FactureroMovil no registra los cobros (columna «Cobrada: N/A»). Si importas el histórico, "
+        "las ya cobradas puedes marcarlas como pagadas; lo nuevo, mejor como pendiente.",
         choices=ESTADO_DESCONOCIDO_OPCIONES,
         initial="pendiente",
         widget=forms.RadioSelect,

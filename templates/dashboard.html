@@ -1,61 +1,138 @@
-{% extends "base.html" %}{% load novera %}
+{% extends "base.html" %}{% load novera static %}
 {% block title %}Inicio{% endblock %}
 {% block content %}
-<div class="encabezado">
-  <h1>Cuentas por cobrar</h1>
-  <span class="tenue">{{ hoy|date:"l j \d\e F \d\e Y" }}</span>
-</div>
-
 {% if sin_datos %}
+<div class="encabezado"><h1>Panel de cobros</h1></div>
 <div class="tarjeta vacio">
   <h2>Aún no hay facturas</h2>
-  <p>Registra la primera o trae todo el histórico desde el Excel.</p>
-  <a class="boton primario" href="{% url 'facturas:nueva' %}">Registrar factura</a>
-  <a class="boton" href="{% url 'facturas:importar' %}">Importar Excel</a>
+  <p>Sube el «Reporte de Factura» de FactureroMovil y aquí verás la facturación, los cobros y la cartera pendiente.</p>
+  <a class="boton primario" href="{% url 'facturas:importar' %}">Importar de FactureroMovil</a>
+  <a class="boton" href="{% url 'facturas:nueva' %}">Registrar una factura</a>
 </div>
 {% else %}
-<section class="kpis">
-  <a class="kpi" href="{% url 'facturas:lista' %}?estado=ABIERTAS">
-    <span>Por cobrar</span><strong>{{ por_cobrar|dinero }}</strong><small>{{ num_por_cobrar }} factura{{ num_por_cobrar|pluralize }}</small>
-  </a>
-  <a class="kpi alerta" href="{% url 'facturas:lista' %}?estado=VENCIDA">
-    <span>Vencido</span><strong>{{ vencido|dinero }}</strong><small>{{ num_vencidas }} factura{{ num_vencidas|pluralize }}</small>
-  </a>
-  <div class="kpi">
-    <span>Cobrado este mes</span><strong>{{ cobrado_mes|dinero }}</strong><small>desde el 1 de {{ hoy|date:"F" }}</small>
+<div class="encabezado">
+  <div>
+    <h1>Panel de cobros</h1>
+    <span class="tenue">Facturas emitidas del {{ desde|date:"j M Y" }} al {{ hasta|date:"j M Y" }}{% if cliente %} · {{ cliente }}{% endif %}</span>
   </div>
-  <div class="kpi">
-    <span>Facturado {{ hoy|date:"F" }}</span><strong>{{ facturado_mes|dinero }}</strong><small>{{ num_facturado_mes }} factura{{ num_facturado_mes|pluralize }}</small>
+  <a class="boton" href="{% url 'facturas:importar' %}">Importar de FactureroMovil</a>
+</div>
+
+<form method="get" class="tarjeta panel-filtros" id="filtros">
+  <label>Periodo {{ form.periodo }}</label>
+  <label class="rango" {% if periodo != "rango" %}hidden{% endif %}>Desde {{ form.desde }}</label>
+  <label class="rango" {% if periodo != "rango" %}hidden{% endif %}>Hasta {{ form.hasta }}</label>
+  <label class="ancho-cliente">Cliente {{ form.cliente }}</label>
+  <div class="acciones-filtro">
+    <button class="boton primario" id="aplicar">Aplicar</button>
+    {% if request.GET %}<a class="boton" href="{% url 'dashboard' %}">Quitar filtros</a>{% endif %}
+  </div>
+</form>
+
+<section class="kpis seis">
+  <a class="kpi" href="{% url 'facturas:lista' %}?{{ filtro_lista }}">
+    <span>Facturado</span><strong>{{ kpis.facturado|dinero }}</strong>
+    <small>{{ kpis.num_facturas }} factura{{ kpis.num_facturas|pluralize }} · {{ kpis.clientes }} cliente{{ kpis.clientes|pluralize }}</small>
+  </a>
+  <div class="kpi verde">
+    <span>Cobrado</span><strong>{{ kpis.cobrado|dinero }}</strong>
+    <small>{% if kpis.tasa_cobro is not None %}{{ kpis.tasa_cobro }} % de lo facturado{% else %}—{% endif %}</small>
+    {% if kpis.tasa_cobro is not None %}<div class="barra" role="img" aria-label="{{ kpis.tasa_cobro }} % cobrado"><i style="width: {{ kpis.tasa_cobro }}%"></i></div>{% endif %}
+  </div>
+  <a class="kpi azul" href="{% url 'facturas:lista' %}?estado=ABIERTAS&{{ filtro_lista }}">
+    <span>Por cobrar</span><strong>{{ kpis.por_cobrar|dinero }}</strong>
+    <small>{{ kpis.num_abiertas }} factura{{ kpis.num_abiertas|pluralize }} abierta{{ kpis.num_abiertas|pluralize }}</small>
+  </a>
+  <a class="kpi alerta" href="{% url 'facturas:lista' %}?estado=VENCIDA&{{ filtro_lista }}">
+    <span>Vencido</span><strong>{{ kpis.vencido|dinero }}</strong>
+    <small>{{ kpis.num_vencidas }} factura{{ kpis.num_vencidas|pluralize }}{% if kpis.pct_vencido is not None %} · {{ kpis.pct_vencido }} % de lo pendiente{% endif %}</small>
+  </a>
+  <div class="kpi neutro">
+    <span>Ticket promedio</span><strong>{{ kpis.ticket|dinero }}</strong><small>por factura</small>
+  </div>
+  <div class="kpi neutro">
+    <span>Días promedio de cobro</span>
+    <strong>{% if kpis.dias_cobro is not None %}{{ kpis.dias_cobro }} día{{ kpis.dias_cobro|pluralize }}{% else %}—{% endif %}</strong>
+    <small>{% if kpis.dias_cobro is not None %}de la emisión al pago{% else %}aún no hay pagos registrados{% endif %}</small>
   </div>
 </section>
 
-<div class="rejilla">
-  <section class="tarjeta">
-    <h2>Vencidas más antiguas</h2>
-    {% include "facturas/_tabla_corta.html" with facturas=vencidas vacio="No hay facturas vencidas." %}
-  </section>
-  <section class="tarjeta">
-    <h2>Vencen en los próximos 7 días</h2>
-    {% include "facturas/_tabla_corta.html" with facturas=proximas vacio="Nada vence esta semana." %}
-  </section>
-  <section class="tarjeta ancha">
-    <h2>Saldo por cliente</h2>
-    {% if por_cliente %}
+<section class="tarjeta">
+  <div class="titulo-grafico">
+    <h2>Facturado vs. cobrado por mes</h2>
+    <span class="tenue">Facturado por fecha de emisión · cobrado por fecha de pago</span>
+  </div>
+  <div class="grafico alto"><canvas id="g-mensual" aria-label="Facturado y cobrado por mes" role="img"></canvas></div>
+  <details class="tabla-datos">
+    <summary>Ver como tabla</summary>
+    <div class="desplazable">
     <table>
-      <thead><tr><th>Cliente</th><th class="num">Facturas</th><th class="num">Vencido</th><th class="num">Saldo</th></tr></thead>
+      <thead><tr><th>Mes</th><th class="num">Facturado</th><th class="num">Cobrado</th></tr></thead>
+      <tbody>{% for m in mensual %}<tr><td>{{ m.mes_largo|capfirst }}</td><td class="num">{{ m.facturado|dinero }}</td><td class="num">{{ m.cobrado|dinero }}</td></tr>{% endfor %}</tbody>
+    </table>
+    </div>
+  </details>
+</section>
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <div class="titulo-grafico">
+      <h2>Antigüedad de lo pendiente</h2>
+      <span class="tenue">Saldo según días de atraso al {{ hoy|date:"j M" }}</span>
+    </div>
+    <div class="grafico"><canvas id="g-tramos" aria-label="Saldo pendiente por días de atraso" role="img"></canvas></div>
+  </section>
+  <section class="tarjeta">
+    <div class="titulo-grafico">
+      <h2>Facturas por estado</h2>
+      <span class="tenue">Valor total facturado en cada estado · clic para ver el listado</span>
+    </div>
+    <div class="grafico"><canvas id="g-estados" aria-label="Valor facturado por estado" role="img"></canvas></div>
+  </section>
+
+  <section class="tarjeta">
+    <div class="titulo-grafico">
+      <h2>Clientes con más facturación</h2>
+      <span class="tenue">Top 8 del periodo · clic para ver el cliente</span>
+    </div>
+    <div class="grafico alto"><canvas id="g-clientes" aria-label="Facturación por cliente" role="img"></canvas></div>
+  </section>
+  <section class="tarjeta">
+    <h2>Saldo pendiente por cliente</h2>
+    {% if saldos_clientes %}
+    <div class="desplazable">
+    <table>
+      <thead><tr><th>Cliente</th><th class="num">Abiertas</th><th class="num">Vencido</th><th class="num">Saldo</th></tr></thead>
       <tbody>
-      {% for c in por_cliente %}
+      {% for c in saldos_clientes %}
         <tr>
           <td>{% if c.id %}<a href="{% url 'clientes:detalle' c.id %}">{{ c.nombre }}</a>{% else %}{{ c.nombre }}{% endif %}</td>
-          <td class="num">{{ c.n }}</td>
+          <td class="num">{{ c.abiertas }}</td>
           <td class="num {% if c.vencido %}rojo{% endif %}">{{ c.vencido|dinero }}</td>
           <td class="num"><strong>{{ c.saldo|dinero }}</strong></td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
-    {% else %}<p class="tenue">Todo cobrado.</p>{% endif %}
+    </div>
+    {% else %}<p class="tenue">Nada pendiente en este periodo.</p>{% endif %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>Vencidas más antiguas</h2>
+    {% include "facturas/_tabla_corta.html" with facturas=vencidas vacio="No hay facturas vencidas en este periodo." %}
+  </section>
+  <section class="tarjeta">
+    <h2>Vencen en los próximos 7 días</h2>
+    {% include "facturas/_tabla_corta.html" with facturas=proximas vacio="Nada vence esta semana." %}
   </section>
 </div>
+{{ graficos|json_script:"datos-panel" }}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if not sin_datos %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script src="{% static 'js/dashboard.js' %}" data-lista="{% url 'facturas:lista' %}" data-filtro="{{ filtro_lista }}" data-cliente="{% url 'clientes:detalle' 0 %}"></script>
 {% endif %}
 {% endblock %}

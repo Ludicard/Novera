@@ -129,3 +129,105 @@ class ImportacionTests(TestCase):
         wb = openpyxl.Workbook()
         wb.save(self.ruta)
         self.assertTrue(imp.analizar(self.ruta).errores)
+
+
+ENCABEZADO_FM = [
+    "Fecha de emision", "No Factura", "Clave de acceso", "Base imponible IVA", "Base imponible 0%",
+    "Base imponible 5%", "Base imponible 8%", "Base imponible no IVA", "IVA", "IVA 5%", "IVA 8%", "ICE",
+    "Total descuento", "Valor total", "NID Cliente", "Cliente", "Estado", "Reembolso", "Por cobrar",
+    "Saldo cobrar", "Cobrada", "Info. adicional", "Centro de costo", "Plazo", "Forma de Pago",
+    "Valor de Pago", "Placa",
+]
+
+
+def fila_fm(fecha, numero, base, iva, total, ruc, cliente, info="", estado="Autorizado SRI",
+            por_cobrar="NO", saldo=0.0, cobrada="N/A", plazo=0):
+    return [fecha, numero, "0" * 49, base, 0.0, 0.0, 0.0, 0.0, iva, 0.0, 0.0, 0.0, 0.0, total, ruc, cliente,
+            estado, "NO", por_cobrar, saldo, cobrada, info, None, plazo, "OTROS CON UTILIZACION DEL SISTEMA FINANCIERO",
+            total, None]
+
+
+def excel_facturero(filas):
+    """Reporte de Factura como lo descarga FactureroMovil (datos ficticios)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Reporte de Factura 2025-01-01 "
+    ws.append(["FACTURERO MÓVIL"])
+    ws.append(["REPORTE DE FACTURA 2025-01-01 _ 2025-12-31"])
+    ws.append(["Fecha de generación: 2026-01-02 10:00:00"])
+    ws.append(["Generado por: USUARIO DE PRUEBA"])
+    ws.append([])
+    ws.append(ENCABEZADO_FM)
+    for f in filas:
+        ws.append(f)
+    ruta = Path(tempfile.mkdtemp()) / "reporte.xlsx"
+    wb.save(ruta)
+    return ruta
+
+
+class FactureroMovilTests(TestCase):
+    def setUp(self):
+        self.ruta = excel_facturero([
+            fila_fm("2025-01-07", "001-001-000000101", 759.0, 113.85, 872.85, "1790000001001", "EDIFICIO CENTRAL S.A.",
+                    "Dirección: Av. Siempre Viva 123 | Email: admin@central.test otra@central.test | Mes del Servicio: Diciembre"),
+            fila_fm("2025-02-10", "001-001-000000102", 100.0, 15.0, 115.0, "1790000001001", "Edificio Central",
+                    "Dirección: Av. Siempre Viva 123 | Teléfonos: 0999999999 | Mes ddel Servicio: Febrero", plazo=15),
+            fila_fm("2025-03-03", "001-001-000000103", 200.0, 30.0, 230.0, "0990000002001", "CONJUNTO NORTE",
+                    "Mes del Servicio: Marzo | Ascensor: Numero 2", por_cobrar="SI", saldo=130.0),
+            fila_fm("2025-03-04", "001-001-000000104", 50.0, 7.5, 57.5, "0990000002001", "CONJUNTO NORTE", cobrada="SI"),
+            fila_fm("2025-03-05", "001-001-000000105", 80.0, 12.0, 92.0, "0990000002001", "CONJUNTO NORTE",
+                    estado="Anulado"),
+            fila_fm("2025-03-06", "001-001-000000106", 80.0, 12.0, 92.0, "0990000002001", "CONJUNTO NORTE",
+                    estado="Devuelta"),
+            fila_fm("2025-03-07", "001-001-000000101", 1.0, 0.15, 1.15, "0990000002001", "CONJUNTO NORTE"),
+        ])
+
+    def test_detecta_formato_y_normaliza(self):
+        r = imp.analizar(self.ruta)
+        self.assertEqual(r.formato, "FactureroMovil")
+        self.assertEqual(r.errores, [])
+        f = {x.numero: x for x in r.importables}
+        self.assertEqual(set(f), {"001-001-000000101", "001-001-000000102", "001-001-000000103",
+                                  "001-001-000000104", "001-001-000000105"})
+        a = f["001-001-000000101"]
+        self.assertEqual(a.periodo, date(2024, 12, 1))  # servicio de diciembre facturado en enero
+        self.assertEqual((a.subtotal, a.porcentaje_iva, a.iva, a.total),
+                         (Decimal("759.00"), Decimal("15"), Decimal("113.85"), Decimal("872.85")))
+        self.assertEqual(a.email, "admin@central.test")
+        self.assertEqual(a.direccion, "Av. Siempre Viva 123")
+        self.assertEqual(a.objeto, "Mes del Servicio: Diciembre")
+        self.assertEqual(f["001-001-000000102"].periodo, date(2025, 2, 1))  # errata en la clave
+        self.assertEqual(f["001-001-000000102"].dias_credito, 15)
+        self.assertEqual(f["001-001-000000103"].abonado, Decimal("100.00"))
+        self.assertEqual(f["001-001-000000104"].accion, "pagada")
+        self.assertEqual(f["001-001-000000105"].accion, "anulada")
+        omitidas = {x.numero: x.avisos for x in r.omitidas}
+        self.assertIn("no está autorizada", omitidas["001-001-000000106"][0])
+        self.assertEqual(r.resumen()["clientes_nuevos"], 2)
+
+    def test_aplicar_crea_clientes_por_ruc_y_pagos(self):
+        imp.aplicar(imp.analizar(self.ruta, estado_desconocido="pendiente"))
+        self.assertEqual(Cliente.objects.count(), 2)  # «EDIFICIO CENTRAL S.A.» y «Edificio Central» (mismo RUC)
+        central = Cliente.objects.get(identificacion="1790000001001")
+        self.assertEqual((central.email, central.telefono), ("admin@central.test", "0999999999"))
+        hoy = date(2025, 3, 10)
+        estados = {f.numero: f.estado for f in Factura.objects.con_saldos(hoy)}
+        self.assertEqual(estados["001-001-000000103"], "PARCIAL")
+        self.assertEqual(estados["001-001-000000104"], "PAGADA")
+        self.assertEqual(estados["001-001-000000105"], "ANULADA")
+        self.assertEqual(Factura.objects.get(numero="001-001-000000102").fecha_cobro, date(2025, 2, 25))
+        self.assertEqual(len(Factura.objects.get(numero="001-001-000000101").clave_acceso), 49)
+        # Reimportar no duplica
+        r = imp.analizar(self.ruta)
+        self.assertEqual(r.importables, [])
+
+    def test_estado_desconocido_pagada(self):
+        imp.aplicar(imp.analizar(self.ruta, estado_desconocido="pagada"))
+        self.assertEqual(Pago.objects.get(factura__numero="001-001-000000101").monto, Decimal("872.85"))
+
+    def test_archivo_sin_formato(self):
+        wb = openpyxl.Workbook()
+        wb.active.append(["algo", "otra cosa"])
+        ruta = Path(tempfile.mkdtemp()) / "x.xlsx"
+        wb.save(ruta)
+        self.assertIn("No se reconoce el formato", imp.analizar(ruta).errores[0])

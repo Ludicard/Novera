@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Importar Excel{% endblock %}
+{% block title %}Importar facturas{% endblock %}
 {% block content %}
-<div class="encabezado"><h1>Importar facturas desde Excel</h1></div>
+<div class="encabezado"><h1>Importar facturas de FactureroMovil</h1></div>
 <div class="rejilla">
   <form method="post" enctype="multipart/form-data" class="tarjeta formulario">
     {% csrf_token %}
@@ -10,15 +10,22 @@
     <p class="tenue">Primero verás una vista previa. No se guarda nada hasta que confirmes.</p>
   </form>
   <section class="tarjeta">
-    <h2>¿Qué se importa?</h2>
+    <h2>Cómo descargar el archivo</h2>
+    <ol>
+      <li>En FactureroMovil abre <strong>Reportes → Reporte de Factura</strong>.</li>
+      <li>Elige el rango de fechas (por ejemplo, el mes o el año) y descárgalo en <strong>Excel</strong>.</li>
+      <li>Súbelo aquí tal cual, sin modificarlo.</li>
+    </ol>
+    <h2>Qué hace Novera con él</h2>
     <ul>
-      <li>La hoja <strong>Facturas</strong>: número, periodo, fecha, cliente, objeto, fecha de cobro, valor, IVA, total y estado.</li>
-      <li>El catálogo de clientes con RUC de la hoja <strong>Altas</strong>.</li>
-      <li>Las facturas marcadas como <em>Pagada</em> reciben un pago por el total; las <em>Anuladas</em> quedan anuladas.</li>
-      <li>Si el IVA está vacío se deduce del total (12 % en 2024, 15 % después).</li>
-      <li>Los clientes escritos de varias formas («Edificio Central» / «edf central») se unifican.</li>
-      <li>Las facturas que ya existen en Novera se saltan, así que puedes volver a importar sin duplicar.</li>
+      <li>Crea cada factura con su número, clave de acceso, bases, IVA y valor total.</li>
+      <li>Toma el <strong>periodo</strong> del «Mes del Servicio» de la información adicional (si falta, el mes de emisión).</li>
+      <li>Reconoce a los clientes por su <strong>RUC/cédula</strong> y les completa dirección, email y teléfono.</li>
+      <li>La fecha de cobro es la emisión + el plazo (o los días de crédito del cliente).</li>
+      <li>Las anuladas quedan anuladas; las no autorizadas por el SRI se omiten.</li>
+      <li>Las facturas que ya existen se saltan: puedes subir el reporte del año entero cada vez sin duplicar.</li>
     </ul>
+    <p class="tenue">También acepta el Excel histórico anterior (hoja «Facturas»).</p>
   </section>
 </div>
 {% endblock %}

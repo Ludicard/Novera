@@ -15,7 +15,7 @@
     <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Inicio</a>
     <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' and u != 'importar' %}class="activo"{% endif %}>Facturas</a>
     <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
-    <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar Excel</a>
+    <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar</a>
     {% endwith %}
   </nav>
   <div class="usuario">

@@ -2,7 +2,7 @@
 {% block title %}Vista previa de importación{% endblock %}
 {% block content %}
 <div class="encabezado">
-  <div><span class="tenue">{{ original }}</span><h1>Vista previa de importación</h1></div>
+  <div><span class="tenue">{{ original }} · formato {{ resumen.formato }}</span><h1>Vista previa de importación</h1></div>
   <form method="post" class="acciones">
     {% csrf_token %}
     <button class="boton" name="accion" value="cancelar">Cancelar</button>
@@ -13,7 +13,7 @@
 <section class="kpis">
   <div class="kpi"><span>A importar</span><strong>{{ resumen.filas }}</strong><small>{{ resumen.clientes_nuevos }} clientes nuevos</small></div>
   <div class="kpi"><span>Pagadas / pendientes / anuladas</span><strong>{{ resumen.pagadas }} / {{ resumen.pendientes }} / {{ resumen.anuladas }}</strong></div>
-  <div class="kpi"><span>Quedaría por cobrar</span><strong>{{ resumen.por_cobrar|dinero }}</strong></div>
+  <div class="kpi"><span>Facturado / quedaría por cobrar</span><strong>{{ resumen.facturado|dinero }}</strong><small>{{ resumen.por_cobrar|dinero }} por cobrar</small></div>
   <div class="kpi alerta"><span>Con avisos / omitidas</span><strong>{{ resumen.con_avisos }} / {{ resumen.omitidas }}</strong></div>
 </section>
 

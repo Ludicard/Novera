@@ -1,14 +1,11 @@
 import uuid
-from collections import defaultdict
-from datetime import timedelta
-from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,54 +14,19 @@ from django.views.decorators.http import require_POST
 from apps.clientes.models import Cliente
 
 from . import importador
+from .dashboard import datos_panel
 from .exportar import exportar_facturas
 from .forms import AnularForm, FacturaForm, FiltroFacturasForm, ImportarForm, PagoForm
-from .models import Estado, Factura, Pago
-
-CERO = Decimal("0.00")
+from .models import Factura, Pago
 
 
 @login_required
 def dashboard(request):
     hoy = timezone.localdate()
-    mes = hoy.replace(day=1)
-    abiertas = Factura.objects.por_cobrar(hoy).select_related("cliente")
-
-    por_cobrar = abiertas.aggregate(total=Sum("saldo"), n=Count("id"))
-    vencidas = abiertas.filter(estado=Estado.VENCIDA)
-    vencido = vencidas.aggregate(total=Sum("saldo"), n=Count("id"))
-    cobrado_mes = Pago.objects.filter(fecha__gte=mes, fecha__lte=hoy).aggregate(s=Sum("monto"))["s"] or CERO
-    facturado_mes = (
-        Factura.objects.filter(anulada=False, periodo=mes).aggregate(s=Sum("total"), n=Count("id"))
-    )
-
-    saldos = defaultdict(lambda: {"saldo": CERO, "vencido": CERO, "n": 0})
-    for f in abiertas:
-        clave = (f.cliente_id, f.cliente.nombre if f.cliente else "(sin cliente)")
-        saldos[clave]["saldo"] += f.saldo
-        saldos[clave]["n"] += 1
-        if f.estado == Estado.VENCIDA:
-            saldos[clave]["vencido"] += f.saldo
-    por_cliente = sorted(
-        ({"id": k[0], "nombre": k[1], **v} for k, v in saldos.items()), key=lambda x: -x["saldo"]
-    )[:10]
-
-    contexto = {
-        "hoy": hoy,
-        "por_cobrar": por_cobrar["total"] or CERO,
-        "num_por_cobrar": por_cobrar["n"],
-        "vencido": vencido["total"] or CERO,
-        "num_vencidas": vencido["n"],
-        "cobrado_mes": cobrado_mes,
-        "facturado_mes": facturado_mes["s"] or CERO,
-        "num_facturado_mes": facturado_mes["n"],
-        "proximas": abiertas.filter(fecha_cobro__gte=hoy, fecha_cobro__lte=hoy + timedelta(days=7)).order_by(
-            "fecha_cobro"
-        )[:10],
-        "vencidas": vencidas.order_by("fecha_cobro")[:10],
-        "por_cliente": por_cliente,
-        "sin_datos": not Factura.objects.exists(),
-    }
+    if not Factura.objects.exists():
+        return render(request, "dashboard.html", {"hoy": hoy, "sin_datos": True})
+    contexto = datos_panel(request.GET, hoy)
+    contexto["hoy"] = hoy
     return render(request, "dashboard.html", contexto)
 
 
@@ -87,6 +49,10 @@ def _filtrar(get):
             qs = qs.filter(periodo__gte=d["desde"].replace(day=1))
         if d["hasta"]:
             qs = qs.filter(periodo__lte=d["hasta"].replace(day=1))
+        if d["emitida_desde"]:
+            qs = qs.filter(fecha_emision__gte=d["emitida_desde"])
+        if d["emitida_hasta"]:
+            qs = qs.filter(fecha_emision__lte=d["emitida_hasta"])
     return form, qs
 
 

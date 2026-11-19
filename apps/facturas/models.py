@@ -96,13 +96,16 @@ class Factura(models.Model):
     porcentaje_iva = models.DecimalField("% IVA", max_digits=5, decimal_places=2, default=Decimal("15"))
     iva = models.DecimalField("IVA", max_digits=14, decimal_places=2, default=Decimal("0"))
     total = models.DecimalField(max_digits=14, decimal_places=2)
+    clave_acceso = models.CharField(
+        "Clave de acceso SRI", max_length=49, blank=True, help_text="49 dígitos del comprobante electrónico."
+    )
 
     anulada = models.BooleanField(default=False)
     fecha_anulacion = models.DateField(null=True, blank=True)
     motivo_anulacion = models.CharField(max_length=255, blank=True)
 
     notas = models.TextField(blank=True)
-    importada = models.BooleanField(default=False, help_text="Creada desde el Excel histórico.")
+    importada = models.BooleanField(default=False, help_text="Creada por importación de Excel.")
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
     creado_por = models.ForeignKey(

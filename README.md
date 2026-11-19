@@ -11,10 +11,12 @@ cada factura se calcula solo.
   automáticos. Botón «Guardar y registrar otra» para cargar varias seguidas.
 - **Pagos y abonos parciales** por transferencia, depósito, cheque, efectivo o retención.
 - **Estado calculado** (nunca a mano): Pendiente, Abono parcial, Vencida, Pagada, Anulada.
-- **Panel de inicio**: total por cobrar, vencido, cobrado y facturado en el mes, facturas vencidas,
-  las que vencen en 7 días y saldo por cliente.
+- **Panel de inicio** con filtros (periodo y cliente): facturado, cobrado, por cobrar, vencido, ticket y días
+  promedio de cobro; gráficos de facturado vs. cobrado por mes, antigüedad de la cartera, facturas por estado
+  y clientes con más facturación (Chart.js, servido localmente desde `static/vendor/`).
 - **Clientes** con RUC/cédula (validación de 10 o 13 dígitos), días de crédito habituales y estado de cuenta.
-- **Importar el Excel histórico** con vista previa y avisos fila por fila antes de guardar.
+- **Importar el «Reporte de Factura» de FactureroMovil** (y el Excel histórico) con vista previa y avisos
+  fila por fila antes de guardar.
 - **Exportar a Excel** cualquier listado filtrado.
 - Panel de administración de Django en `/admin/` (incluye la acción «Fusionar clientes» para unificar
   un mismo cliente escrito de varias formas).
@@ -118,9 +120,27 @@ Restaurar: `gunzip -c backups/ARCHIVO.sql.gz | docker compose exec -T db psql -U
 docker compose logs -f web
 ```
 
+## Importar facturas de FactureroMovil
+
+En FactureroMovil: **Reportes → Reporte de Factura** → rango de fechas → descargar en Excel. En Novera:
+**Importar** → subir el `.xlsx` → revisar la vista previa → **Importar**. El formato se detecta solo.
+
+| En FactureroMovil | En Novera |
+|---|---|
+| No Factura, Clave de acceso, Fecha de emision | Número, clave de acceso SRI, fecha de emisión |
+| Bases imponibles (IVA, 0 %, 5 %, 8 %, no IVA), IVA, Valor total | Valor sin IVA (suma de bases), % IVA, IVA y total |
+| NID Cliente + Cliente | Cliente reconocido por RUC/cédula (o por nombre) |
+| Info. adicional: Dirección, Email, Teléfonos | Se completan en la ficha del cliente si estaban vacíos |
+| Info. adicional: «Mes del Servicio» (con erratas) | Periodo (si falta, el mes de emisión); el resto va a «Objeto» |
+| Plazo | Días de crédito (si es 0, los del cliente) → fecha de cobro |
+| Estado «Autorizado SRI» / anulada / otro | Se importa / anulada / se omite |
+| Cobrada «SI» · Por cobrar «SI» con saldo | Pagada · abono parcial |
+| Cobrada «N/A» (no se usa ese módulo) | Lo eliges al importar: pendientes o pagadas |
+| Factura que ya existe en Novera | Se salta (puedes subir el reporte del año completo cada vez) |
+
 ## Importar el Excel histórico
 
-Desde la web: **Importar Excel** → subir el `.xlsm` → revisar la vista previa → **Importar**.
+El mismo botón acepta el `.xlsm` anterior (hoja «Facturas»).
 O desde el servidor:
 
 ```bash
