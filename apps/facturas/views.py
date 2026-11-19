@@ -1,13 +1,17 @@
 import uuid
+from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -16,8 +20,8 @@ from apps.clientes.models import Cliente
 from . import importador
 from .dashboard import datos_panel
 from .exportar import exportar_facturas
-from .forms import AnularForm, FacturaForm, FiltroFacturasForm, ImportarForm, PagoForm
-from .models import Factura, Pago
+from .forms import AnularForm, CobroLoteForm, FacturaForm, FiltroFacturasForm, ImportarForm, PagoForm
+from .models import Estado, Factura, Pago
 
 
 @login_required
@@ -30,19 +34,45 @@ def dashboard(request):
     return render(request, "dashboard.html", contexto)
 
 
-def _filtrar(get):
+PESTANAS = [
+    ("", "Todas"),
+    ("ABIERTAS", "Por cobrar"),
+    (Estado.VENCIDA, "Vencidas"),
+    (Estado.PARCIAL, "Abono parcial"),
+    (Estado.PENDIENTE, "Al día"),
+    (Estado.PAGADA, "Pagadas"),
+    (Estado.ANULADA, "Anuladas"),
+]
+ORDENES = {
+    "numero": "numero",
+    "emision": "fecha_emision",
+    "cliente": "cliente__nombre",
+    "vence": "fecha_cobro",
+    "total": "total",
+    "saldo": "saldo",
+}
+ORDEN_DEFECTO = "-emision"
+TAMANOS_PAGINA = [25, 50, 100]
+
+
+def _filtrar(get, con_estado=True):
+    """Devuelve (form, queryset). Con `con_estado=False` ignora el filtro de estado (para las pestañas)."""
     form = FiltroFacturasForm(get or None)
     qs = Factura.objects.con_saldos().select_related("cliente")
     if form.is_valid():
         d = form.cleaned_data
         if d["q"]:
-            qs = qs.filter(
-                Q(numero__icontains=d["q"]) | Q(objeto__icontains=d["q"]) | Q(cliente__nombre__icontains=d["q"])
-            )
-        if d["estado"] == "ABIERTAS":
-            qs = qs.filter(anulada=False, saldo__gt=0)
-        elif d["estado"]:
-            qs = qs.filter(estado=d["estado"])
+            q = d["q"].strip()
+            filtro = Q(numero__icontains=q) | Q(objeto__icontains=q) | Q(cliente__nombre__icontains=q)
+            filtro |= Q(cliente__identificacion__startswith=q) | Q(clave_acceso=q)
+            if q.isdigit():  # «676» encuentra 001-001-000000676
+                filtro |= Q(numero__endswith=q.zfill(9))
+            qs = qs.filter(filtro)
+        if con_estado:
+            if d["estado"] == "ABIERTAS":
+                qs = qs.filter(anulada=False, saldo__gt=0)
+            elif d["estado"]:
+                qs = qs.filter(estado=d["estado"])
         if d["cliente"]:
             qs = qs.filter(cliente=d["cliente"])
         if d["desde"]:
@@ -56,25 +86,103 @@ def _filtrar(get):
     return form, qs
 
 
+def _conteos_por_pestana(qs):
+    conteos = {clave: {"n": 0, "monto": Decimal("0.00")} for clave, _ in PESTANAS}
+    for estado, total, saldo in qs.values_list("estado", "total", "saldo"):
+        conteos[""]["n"] += 1
+        conteos[""]["monto"] += total if estado != Estado.ANULADA else 0
+        if estado in conteos:
+            conteos[estado]["n"] += 1
+            conteos[estado]["monto"] += saldo if estado in (Estado.VENCIDA, Estado.PARCIAL, Estado.PENDIENTE) else total
+        if estado != Estado.ANULADA and saldo > 0:
+            conteos["ABIERTAS"]["n"] += 1
+            conteos["ABIERTAS"]["monto"] += saldo
+    return [{"clave": clave, "nombre": nombre, **conteos[clave]} for clave, nombre in PESTANAS]
+
+
+def _filtros_activos(form, get):
+    """Etiquetas de los filtros aplicados (menos búsqueda y estado), con la URL para quitarlas."""
+    if not form.is_valid():
+        return []
+    d = form.cleaned_data
+    chips = []
+
+    def sin(*campos):
+        resto = get.copy()
+        for c in (*campos, "page"):
+            resto.pop(c, None)
+        return "?" + resto.urlencode()
+
+    if d["cliente"]:
+        chips.append((f"Cliente: {d['cliente']}", sin("cliente")))
+    if d["emitida_desde"] or d["emitida_hasta"]:
+        rango = f"{d['emitida_desde']:%d/%m/%Y}" if d["emitida_desde"] else "…"
+        rango += " – " + (f"{d['emitida_hasta']:%d/%m/%Y}" if d["emitida_hasta"] else "…")
+        chips.append((f"Emitidas {rango}", sin("emitida_desde", "emitida_hasta")))
+    if d["desde"] or d["hasta"]:
+        rango = (f"{d['desde']:%m/%Y}" if d["desde"] else "…") + " – " + (f"{d['hasta']:%m/%Y}" if d["hasta"] else "…")
+        chips.append((f"Periodo {rango}", sin("desde", "hasta")))
+    return chips
+
+
 @login_required
 def lista(request):
-    form, qs = _filtrar(request.GET)
+    hoy = timezone.localdate()
+    form, base = _filtrar(request.GET, con_estado=False)
+    _, qs = _filtrar(request.GET)
     totales = qs.filter(anulada=False).aggregate(
         suma_total=Sum("total"), suma_saldo=Sum("saldo"), suma_pagado=Sum("pagado")
     )
-    pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
+
+    orden = request.GET.get("orden", ORDEN_DEFECTO)
+    campo = ORDENES.get(orden.lstrip("-"))
+    if not campo:
+        orden, campo = ORDEN_DEFECTO, ORDENES[ORDEN_DEFECTO.lstrip("-")]
+    desc = orden.startswith("-")
+    qs = qs.order_by(("-" if desc else "") + campo, "-numero")
+
+    try:
+        por_pagina = int(request.GET.get("por_pagina", 50))
+    except ValueError:
+        por_pagina = 50
+    por_pagina = por_pagina if por_pagina in TAMANOS_PAGINA else 50
+    pagina = Paginator(qs, por_pagina).get_page(request.GET.get("page"))
+    for f in pagina:
+        f.dias_para_cobro = (f.fecha_cobro - hoy).days if f.fecha_cobro else None
+        f.dias_vencida = -f.dias_para_cobro if f.dias_para_cobro and f.dias_para_cobro < 0 else 0
+        f.pct_cobrado = min(100, round(f.pagado / f.total * 100)) if f.total else 0
+
     filtros = request.GET.copy()
     filtros.pop("page", None)
+    d = form.cleaned_data if form.is_valid() else {}
     return render(
         request,
         "facturas/lista.html",
-        {"form": form, "pagina": pagina, "totales": totales, "filtros": filtros.urlencode()},
+        {
+            "form": form,
+            "pagina": pagina,
+            "rango_paginas": pagina.paginator.get_elided_page_range(pagina.number, on_each_side=2, on_ends=1),
+            "totales": totales,
+            "filtros": filtros.urlencode(),
+            "pestanas": _conteos_por_pestana(base),
+            "estado_actual": d.get("estado", ""),
+            "chips": _filtros_activos(form, request.GET),
+            "mas_filtros_abiertos": any(d.get(c) for c in ("cliente", "desde", "hasta", "emitida_desde", "emitida_hasta")),
+            "orden": orden,
+            "por_pagina": por_pagina,
+            "tamanos": TAMANOS_PAGINA,
+            "formas_pago": Pago.Forma.choices,
+            "hoy": hoy,
+        },
     )
 
 
 @login_required
 def exportar(request):
     _, qs = _filtrar(request.GET)
+    ids = [int(x) for x in request.GET.get("ids", "").split(",") if x.isdigit()]
+    if ids:
+        qs = Factura.objects.con_saldos().select_related("cliente").filter(pk__in=ids)
     contenido = exportar_facturas(qs)
     respuesta = HttpResponse(
         contenido, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -82,6 +190,41 @@ def exportar(request):
     nombre = f"novera-facturas-{timezone.localdate():%Y%m%d}.xlsx"
     respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return respuesta
+
+
+def _siguiente(request, defecto):
+    """URL de retorno segura (solo del propio sitio)."""
+    url = request.POST.get("siguiente") or request.GET.get("siguiente")
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return url
+    return defecto
+
+
+@login_required
+@require_POST
+def cobrar_lote(request):
+    """Registra un pago por el saldo completo de cada factura seleccionada."""
+    form = CobroLoteForm(request.POST)
+    volver = _siguiente(request, reverse("facturas:lista"))
+    if not form.is_valid():
+        messages.error(request, "Revisa la fecha y la forma de pago del cobro.")
+        return redirect(volver)
+    d = form.cleaned_data
+    facturas = Factura.objects.por_cobrar().filter(pk__in=d["ids"])
+    total, n = Decimal("0.00"), 0
+    with transaction.atomic():
+        for f in facturas:
+            Pago.objects.create(
+                factura=f, fecha=d["fecha"], forma=d["forma"], referencia=d["referencia"], monto=f.saldo,
+                notas="Cobro en lote desde el listado", creado_por=request.user,
+            )
+            total += f.saldo
+            n += 1
+    if n:
+        messages.success(request, f"{n} factura{'s' if n != 1 else ''} marcada{'s' if n != 1 else ''} como cobrada{'s' if n != 1 else ''} por ${total:,.2f}.")
+    else:
+        messages.info(request, "Las facturas seleccionadas no tenían saldo pendiente.")
+    return redirect(volver)
 
 
 def _dias_credito_clientes():
@@ -132,10 +275,25 @@ def editar(request, pk):
 
 
 def _render_detalle(request, factura, pago_form=None, anular_form=None, status=200):
+    hoy = timezone.localdate()
+    dias = (factura.fecha_cobro - hoy).days if factura.fecha_cobro else None
+    # Volver al listado con los mismos filtros si se llegó desde él
+    referer = request.META.get("HTTP_REFERER", "")
+    lista_url = reverse("facturas:lista")
+    volver = lista_url
+    if lista_url in referer and url_has_allowed_host_and_scheme(referer, allowed_hosts={request.get_host()}):
+        volver = referer
+        request.session["volver_facturas"] = referer
+    elif request.session.get("volver_facturas"):
+        volver = request.session["volver_facturas"]
     return render(
         request,
         "facturas/detalle.html",
         {
+            "volver": volver,
+            "dias_para_cobro": dias,
+            "dias_vencida": -dias if dias is not None and dias < 0 else 0,
+            "pct_cobrado": min(100, round(factura.pagado / factura.total * 100)) if factura.total else 0,
             "factura": factura,
             "pagos": factura.pagos.all(),
             "pago_form": pago_form or PagoForm(factura=factura),
@@ -159,14 +317,19 @@ def detalle(request, pk):
 def registrar_pago(request, pk):
     factura = _factura_con_saldo(pk)
     form = PagoForm(request.POST, factura=factura)
+    volver = _siguiente(request, None)
     if not form.is_valid():
+        if volver:  # viene del diálogo «Cobrar» del listado
+            errores = "; ".join(e for lista in form.errors.values() for e in lista)
+            messages.error(request, f"No se registró el pago de {factura.numero}: {errores}")
+            return redirect(volver)
         return _render_detalle(request, factura, pago_form=form, status=400)
     pago = form.save(commit=False)
     pago.factura = factura
     pago.creado_por = request.user
     pago.save()
-    messages.success(request, f"Pago de ${pago.monto} registrado.")
-    return redirect(factura)
+    messages.success(request, f"Pago de ${pago.monto} registrado en {factura.numero}.")
+    return redirect(volver or factura)
 
 
 @login_required
@@ -223,14 +386,25 @@ def importar(request):
             _borrar_pendiente(request)
             messages.info(request, "Importación cancelada.")
             return redirect("facturas:importar")
-        resultado = importador.analizar(_carpeta() / datos["archivo"], datos["estado_desconocido"])
-        creados = importador.aplicar(resultado, usuario=request.user)
-        _borrar_pendiente(request)
-        messages.success(
-            request,
+        # Se saca de la sesión antes de aplicar: un doble clic en «Importar» no puede repetirlo
+        request.session.pop(SESION)
+        request.session.modified = True
+        archivo = _carpeta() / datos["archivo"]
+        try:
+            resultado = importador.analizar(archivo, datos["estado_desconocido"])
+            creados = importador.aplicar(resultado, usuario=request.user)
+        except IntegrityError:
+            messages.error(request, "Esas facturas ya se estaban importando. Revisa el listado antes de reintentar.")
+            return redirect("facturas:lista")
+        finally:
+            archivo.unlink(missing_ok=True)
+        mensaje = (
             f"Importación completa: {creados['facturas']} facturas, {creados['pagos']} pagos "
-            f"y {creados['clientes']} clientes nuevos.",
+            f"y {creados['clientes']} clientes nuevos."
         )
+        if creados["saltadas"]:
+            mensaje += f" {creados['saltadas']} ya existían y se saltaron."
+        messages.success(request, mensaje)
         return redirect("facturas:lista")
 
     form = ImportarForm(request.POST or None, request.FILES or None)

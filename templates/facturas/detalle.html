@@ -1,15 +1,31 @@
 {% extends "base.html" %}{% load novera %}
 {% block title %}{{ factura.numero }}{% endblock %}
 {% block content %}
+<a class="volver" href="{{ volver }}">← Volver a facturas</a>
 <div class="encabezado">
   <div>
-    <span class="tenue">{{ factura.get_tipo_display }}</span>
+    <span class="tenue">{{ factura.get_tipo_display }}{% if factura.cliente %} · {{ factura.cliente }}{% endif %}</span>
     <h1>{{ factura.numero }} {% estado factura.estado %}</h1>
   </div>
   {% if not factura.anulada %}<a class="boton" href="{% url 'facturas:editar' factura.pk %}">Editar</a>{% endif %}
 </div>
 
-<div class="rejilla">
+{% if not factura.anulada and factura.total %}
+<div class="tarjeta cobro-resumen">
+  <div class="cifras">
+    <div><span>Total</span><strong>{{ factura.total|dinero }}</strong></div>
+    <div><span>Cobrado</span><strong class="verde">{{ factura.pagado|dinero }}</strong></div>
+    <div><span>Saldo</span><strong {% if factura.estado == "VENCIDA" %}class="rojo"{% endif %}>{{ factura.saldo|dinero }}</strong></div>
+    <div><span>{% if factura.estado == "VENCIDA" %}Venció{% else %}Vence{% endif %}</span><strong>{{ factura.fecha_cobro|date:"d/m/Y"|default:"—" }}</strong>
+      {% if dias_para_cobro is not None and factura.saldo > 0 %}<small class="{% if dias_para_cobro < 0 %}rojo{% elif dias_para_cobro <= 7 %}ambar{% else %}tenue{% endif %}">{% if dias_para_cobro < 0 %}hace {{ dias_vencida }} día{{ dias_vencida|pluralize }}{% elif dias_para_cobro == 0 %}hoy{% else %}en {{ dias_para_cobro }} día{{ dias_para_cobro|pluralize }}{% endif %}</small>{% endif %}
+    </div>
+  </div>
+  <div class="progreso grande" role="img" aria-label="{{ pct_cobrado }} % cobrado"><i style="width: {{ pct_cobrado }}%"></i></div>
+  <small class="tenue">{{ pct_cobrado }} % cobrado</small>
+</div>
+{% endif %}
+
+<div class="rejilla panel">
   <section class="tarjeta">
     <dl class="datos">
       <dt>Cliente</dt><dd>{% if factura.cliente %}<a href="{{ factura.cliente.get_absolute_url }}">{{ factura.cliente }}</a>{% else %}—{% endif %}</dd>
@@ -18,6 +34,8 @@
       <dt>Emisión</dt><dd>{{ factura.fecha_emision|date:"d/m/Y" }}</dd>
       <dt>Crédito</dt><dd>{{ factura.dias_credito }} días</dd>
       <dt>Fecha de cobro</dt><dd>{{ factura.fecha_cobro|date:"d/m/Y"|default:"—" }}</dd>
+      {% if factura.clave_acceso %}<dt>Clave de acceso</dt><dd class="clave">{{ factura.clave_acceso }}</dd>{% endif %}
+      {% if factura.cliente.identificacion %}<dt>RUC / Cédula</dt><dd>{{ factura.cliente.identificacion }}</dd>{% endif %}
       {% if factura.notas %}<dt>Notas</dt><dd class="pre">{{ factura.notas }}</dd>{% endif %}
       {% if factura.anulada %}<dt>Anulada</dt><dd>{{ factura.fecha_anulacion|date:"d/m/Y" }} · {{ factura.motivo_anulacion }}</dd>{% endif %}
     </dl>
@@ -54,7 +72,7 @@
     {% else %}<p class="tenue">Sin pagos registrados.</p>{% endif %}
 
     {% if not factura.anulada and factura.saldo > 0 %}
-    <h3>Registrar pago</h3>
+    <h3>Registrar pago <button type="button" class="enlace" id="saldo-completo" data-saldo="{{ factura.saldo|floatformat:'2u' }}">usar saldo completo ({{ factura.saldo|dinero }})</button></h3>
     <form method="post" action="{% url 'facturas:registrar_pago' factura.pk %}" class="formulario en-linea">
       {% csrf_token %}
       {% with form=pago_form %}{% include "_campos.html" %}{% endwith %}
@@ -79,4 +97,17 @@
   </section>
   {% endif %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var b = document.getElementById("saldo-completo");
+  if (!b) return;
+  b.addEventListener("click", function () {
+    var monto = document.querySelector("form [name=monto]");
+    monto.value = b.dataset.saldo;
+    monto.focus();
+  });
+})();
+</script>
 {% endblock %}

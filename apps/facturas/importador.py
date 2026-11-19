@@ -32,7 +32,7 @@ from django.db import transaction
 
 from apps.clientes.models import Cliente
 
-from .models import Factura, Pago, redondear
+from .models import Factura, Pago, clave_numero, redondear
 
 MESES = {
     "enero": 1, "ene": 1,
@@ -252,6 +252,28 @@ def _tasa_cercana(iva, subtotal):
     return cercana if abs(cercana - pct) <= Decimal("0.6") else redondear(pct)
 
 
+# ---------------------------------------------------------------- duplicados
+
+
+class Registro:
+    """Números (canónicos) y claves de acceso ya vistos: en Novera o antes en el mismo archivo."""
+
+    def __init__(self, desde_bd=True):
+        self.numeros = set()
+        self.claves = set()
+        if desde_bd:
+            for numero, clave in Factura.objects.values_list("numero", "clave_acceso"):
+                self.agregar(numero, clave)
+
+    def contiene(self, numero, clave_acceso=""):
+        return clave_numero(numero) in self.numeros or bool(clave_acceso and clave_acceso in self.claves)
+
+    def agregar(self, numero, clave_acceso=""):
+        self.numeros.add(clave_numero(numero))
+        if clave_acceso:
+            self.claves.add(clave_acceso)
+
+
 # ---------------------------------------------------------------- análisis
 
 
@@ -283,6 +305,7 @@ class FilaImportada:
     notas: list[str] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
     omitida: bool = False
+    ya_existe: bool = False
 
 
 @dataclass
@@ -323,6 +346,7 @@ class Resultado:
         return {
             "filas": len(filas),
             "omitidas": len(self.omitidas),
+            "ya_existen": sum(1 for f in self.filas if f.ya_existe),
             "con_avisos": len(self.con_avisos),
             "pagadas": sum(1 for f in filas if f.accion == "pagada"),
             "pendientes": sum(1 for f in filas if f.accion == "pendiente"),
@@ -446,8 +470,8 @@ def _analizar_facturero(ws, fila_encabezado, cols, estado_desconocido="pendiente
             errores=[f"Al reporte de FactureroMovil le faltan columnas: {', '.join(sorted(faltan))}"],
         )
 
-    existentes = set(Factura.objects.values_list("numero", flat=True))
-    vistos = set()
+    existentes = Registro()
+    vistos = Registro(desde_bd=False)
     filas = []
     for n, valores in enumerate(ws.iter_rows(min_row=fila_encabezado + 1, values_only=True), start=fila_encabezado + 1):
         def v(campo):
@@ -538,13 +562,14 @@ def _analizar_facturero(ws, fila_encabezado, cols, estado_desconocido="pendiente
             else:
                 fila.accion = estado_desconocido
 
-        if fila.numero in existentes:
+        if existentes.contiene(fila.numero, fila.clave_acceso):
             fila.omitida = True
+            fila.ya_existe = True
             fila.avisos.append("Ya existe en Novera")
-        elif fila.numero in vistos:
+        elif vistos.contiene(fila.numero, fila.clave_acceso):
             fila.omitida = True
             fila.avisos.append("Repetida en el archivo")
-        vistos.add(fila.numero)
+        vistos.agregar(fila.numero, fila.clave_acceso)
 
     if not filas:
         return Resultado(filas=[], catalogo={}, formato="FactureroMovil", errores=["El reporte no tiene facturas."])
@@ -571,7 +596,7 @@ def _analizar_historico(wb, ws, estado_desconocido):
         break
 
     catalogo = _leer_catalogo(wb)
-    existentes = set(Factura.objects.values_list("numero", flat=True))
+    existentes = Registro()
     vistos = {}
     filas = []
     fecha_anterior = None
@@ -644,19 +669,27 @@ def _analizar_historico(wb, ws, estado_desconocido):
             if not fila.cliente:
                 fila.avisos.append("Sin cliente")
 
-        # Duplicados
-        if fila.numero in existentes:
+        # Duplicados (una repetición dentro del Excel se importa con sufijo para revisarla)
+        clave = clave_numero(fila.numero)
+        if existentes.contiene(fila.numero) and clave not in vistos:
             fila.omitida = True
+            fila.ya_existe = True
             fila.avisos.append("Ya existe en Novera")
+            vistos[clave] = 1
             continue
-        if fila.numero in vistos:
-            vistos[fila.numero] += 1
+        if clave in vistos:
+            vistos[clave] += 1
             original = fila.numero
-            fila.numero = f"{original} (dup {vistos[original]})"
+            fila.numero = f"{original} (dup {vistos[clave]})"
+            if existentes.contiene(fila.numero):
+                fila.omitida = True
+                fila.ya_existe = True
+                fila.avisos.append("Ya existe en Novera")
+                continue
             fila.notas.append(f"Número repetido en el Excel: {original}")
             fila.avisos.append("Número repetido en el Excel: se importa con sufijo para revisarlo")
         else:
-            vistos[fila.numero] = 1
+            vistos[clave] = 1
 
     return Resultado(filas=filas, catalogo=catalogo)
 
@@ -670,7 +703,9 @@ def aplicar(resultado, usuario=None, dias_credito=30):
     todos = list(Cliente.objects.all())
     por_clave = {clave_cliente(c.nombre): c for c in todos}
     por_ruc = {c.identificacion: c for c in todos if c.identificacion}
-    creados = {"clientes": 0, "facturas": 0, "pagos": 0}
+    creados = {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0}
+    # Se vuelve a comprobar aquí: entre la vista previa y la confirmación pudo importarse lo mismo
+    registradas = Registro()
 
     def obtener_cliente(clave, nombre, identificacion="", email="", telefono="", direccion=""):
         if not clave and not identificacion:
@@ -702,6 +737,10 @@ def aplicar(resultado, usuario=None, dias_credito=30):
         obtener_cliente(clave, nombre, ruc)
 
     for fila in resultado.importables:
+        if registradas.contiene(fila.numero, fila.clave_acceso):
+            creados["saltadas"] += 1
+            continue
+        registradas.agregar(fila.numero, fila.clave_acceso)
         cliente = obtener_cliente(
             fila.clave, fila.cliente, fila.identificacion, fila.email, fila.telefono, fila.direccion
         )

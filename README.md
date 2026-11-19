@@ -9,6 +9,9 @@ cada factura se calcula solo.
 - **Registrar facturas** con número SRI (`001-001-000000676`; basta escribir `676`), periodo, fecha de
   emisión, cliente, objeto, días de crédito → **fecha de cobro automática**, valor, % IVA → IVA y total
   automáticos. Botón «Guardar y registrar otra» para cargar varias seguidas.
+- **Listado de facturas** con pestañas por estado (con conteos y montos), búsqueda en vivo (tecla `/`),
+  filtros con etiquetas, columnas ordenables, vencimiento relativo, cobro rápido desde la fila y selección
+  múltiple para marcar varias como cobradas o exportarlas.
 - **Pagos y abonos parciales** por transferencia, depósito, cheque, efectivo o retención.
 - **Estado calculado** (nunca a mano): Pendiente, Abono parcial, Vencida, Pagada, Anulada.
 - **Panel de inicio** con filtros (periodo y cliente): facturado, cobrado, por cobrar, vencido, ticket y días
@@ -137,6 +140,11 @@ En FactureroMovil: **Reportes → Reporte de Factura** → rango de fechas → d
 | Cobrada «SI» · Por cobrar «SI» con saldo | Pagada · abono parcial |
 | Cobrada «N/A» (no se usa ese módulo) | Lo eliges al importar: pendientes o pagadas |
 | Factura que ya existe en Novera | Se salta (puedes subir el reporte del año completo cada vez) |
+
+**Sin duplicados:** una factura se considera la misma si coincide su número en forma canónica
+(`676` = `001-001-676` = `001-001-000000676`) o su clave de acceso. Se comprueba en la vista previa, otra vez
+justo al confirmar (por si se importó lo mismo entretanto o se pulsó dos veces) y, como última barrera, la base
+de datos no admite dos números ni dos claves de acceso iguales. El alta manual usa la misma comprobación.
 
 ## Importar el Excel histórico
 

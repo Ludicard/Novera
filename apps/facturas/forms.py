@@ -7,7 +7,7 @@ from django.utils import timezone
 from apps.clientes.models import Cliente
 
 from .importador import ESTADO_DESCONOCIDO_OPCIONES
-from .models import Estado, Factura, Pago
+from .models import Estado, Factura, Pago, redondear
 
 FECHA = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 MES = forms.DateInput(attrs={"type": "month"}, format="%Y-%m")
@@ -65,8 +65,9 @@ class FacturaForm(forms.ModelForm):
         numero = " ".join(self.cleaned_data["numero"].split())
         if self.cleaned_data.get("tipo", Factura.Tipo.FACTURA) == Factura.Tipo.FACTURA and numero.isdigit():
             numero = f"{settings.NOVERA_SERIE_FACTURA}-{int(numero):09d}"
-        if Factura.objects.filter(numero__iexact=numero).exclude(pk=self.instance.pk).exists():
-            raise forms.ValidationError(f"Ya existe el documento {numero}.")
+        duplicada = Factura.objects.buscar_duplicado(numero, excluir=self.instance.pk)
+        if duplicada:
+            raise forms.ValidationError(f"Ya existe el documento {duplicada.numero}.")
         return numero
 
     def clean(self):
@@ -97,7 +98,7 @@ class PagoForm(forms.ModelForm):
     def __init__(self, *args, factura, **kwargs):
         super().__init__(*args, **kwargs)
         self.factura = factura
-        self.initial.setdefault("monto", factura.saldo_pendiente())
+        self.initial.setdefault("monto", redondear(factura.saldo_pendiente()))
         self.initial.setdefault("fecha", timezone.localdate())
 
     def clean_monto(self):
@@ -113,12 +114,28 @@ class PagoForm(forms.ModelForm):
         return super().clean()
 
 
+class CobroLoteForm(forms.Form):
+    ids = forms.CharField()
+    fecha = forms.DateField(widget=FECHA)
+    forma = forms.ChoiceField(choices=Pago.Forma.choices)
+    referencia = forms.CharField(max_length=100, required=False)
+
+    def clean_ids(self):
+        ids = [int(x) for x in self.cleaned_data["ids"].split(",") if x.strip().isdigit()]
+        if not ids:
+            raise forms.ValidationError("No hay facturas seleccionadas.")
+        return ids
+
+
 class AnularForm(forms.Form):
     motivo = forms.CharField(max_length=255, label="Motivo de la anulación")
 
 
 class FiltroFacturasForm(forms.Form):
-    q = forms.CharField(required=False, label="Buscar", widget=forms.TextInput(attrs={"placeholder": "Número, cliente u objeto"}))
+    q = forms.CharField(
+        required=False, label="Buscar",
+        widget=forms.TextInput(attrs={"placeholder": "Buscar por número, cliente, RUC u objeto…", "type": "search", "autocomplete": "off"}),
+    )
     estado = forms.ChoiceField(
         required=False, choices=[("", "Todos"), ("ABIERTAS", "Por cobrar")] + list(Estado.choices)
     )

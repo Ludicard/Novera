@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -27,6 +28,21 @@ CENTAVO = Decimal("0.01")
 
 def redondear(valor):
     return Decimal(valor).quantize(CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def clave_numero(numero):
+    """Forma canónica de un número de documento para detectar duplicados.
+
+    «676», «001-001-676» y «001-001-000000676» son la misma factura; «Recibo 066» se compara sin
+    distinguir mayúsculas ni espacios.
+    """
+    s = re.sub(r"\s+", " ", str(numero or "")).strip().lower()
+    m = re.fullmatch(r"(\d{3})\s*-\s*(\d{3})\s*-\s*(\d{1,9})", s)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{int(m.group(3)):09d}"
+    if s.isdigit():
+        return f"{settings.NOVERA_SERIE_FACTURA}-{int(s):09d}"
+    return s
 
 
 class Estado(models.TextChoices):
@@ -74,6 +90,20 @@ class FacturaQuerySet(models.QuerySet):
     def por_cobrar(self, hoy=None):
         return self.con_saldos(hoy).filter(anulada=False, saldo__gt=0)
 
+    def buscar_duplicado(self, numero, clave_acceso="", excluir=None):
+        """Factura ya registrada con el mismo número (en forma canónica) o la misma clave de acceso."""
+        qs = self.exclude(pk=excluir) if excluir else self
+        if clave_acceso:
+            encontrada = qs.filter(clave_acceso=clave_acceso).first()
+            if encontrada:
+                return encontrada
+        clave = clave_numero(numero)
+        secuencial = clave.rsplit("-", 1)[-1].lstrip("0") or "0"
+        for f in qs.filter(numero__icontains=secuencial).only("pk", "numero"):
+            if clave_numero(f.numero) == clave:
+                return f
+        return None
+
 
 class Factura(models.Model):
     class Tipo(models.TextChoices):
@@ -119,6 +149,11 @@ class Factura(models.Model):
         indexes = [
             models.Index(fields=["periodo"]),
             models.Index(fields=["fecha_cobro"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clave_acceso"], condition=~models.Q(clave_acceso=""), name="factura_clave_acceso_unica"
+            ),
         ]
 
     def __str__(self):

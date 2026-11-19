@@ -182,3 +182,89 @@ class PanelTests(TestCase):
     def test_lista_filtra_por_emision(self):
         r = self.client.get(reverse("facturas:lista") + "?emitida_desde=2025-05-01&emitida_hasta=2025-06-30")
         self.assertEqual(r.context["pagina"].paginator.count, 2)
+
+
+class ListadoTests(TestCase):
+    def setUp(self):
+        from datetime import date
+        self.user = User.objects.create_user("usuario", password="clave-segura-123")
+        self.client.force_login(self.user)
+        self.cliente = Cliente.objects.create(nombre="Edificio Central")
+        hoy = timezone.localdate()
+        def factura(n, total, dias_atras):
+            emision = hoy - timedelta(days=dias_atras)
+            return Factura.objects.create(
+                numero=f"001-001-{n:09d}", cliente=self.cliente, periodo=emision, fecha_emision=emision,
+                dias_credito=30, subtotal=total, porcentaje_iva=0, iva=0, total=total,
+            )
+        self.vencida = factura(676, Decimal("100.00"), 60)
+        self.al_dia = factura(677, Decimal("200.00"), 5)
+        self.pagada = factura(678, Decimal("50.00"), 10)
+        Pago.objects.create(factura=self.pagada, monto=Decimal("50.00"))
+        self.url = reverse("facturas:lista")
+
+    def test_pestanas_y_conteos(self):
+        r = self.client.get(self.url)
+        conteos = {p["clave"]: p["n"] for p in r.context["pestanas"]}
+        self.assertEqual(conteos[""], 3)
+        self.assertEqual(conteos["ABIERTAS"], 2)
+        self.assertEqual(conteos["VENCIDA"], 1)
+        self.assertEqual(conteos["PAGADA"], 1)
+        r = self.client.get(self.url + "?estado=VENCIDA")
+        self.assertEqual([f.pk for f in r.context["pagina"]], [self.vencida.pk])
+
+    def test_orden_y_busqueda(self):
+        r = self.client.get(self.url + "?orden=-total")
+        self.assertEqual([f.pk for f in r.context["pagina"]], [self.al_dia.pk, self.vencida.pk, self.pagada.pk])
+        r = self.client.get(self.url + "?orden=no-existe")
+        self.assertEqual(r.status_code, 200)
+        r = self.client.get(self.url + "?q=676")
+        self.assertEqual([f.pk for f in r.context["pagina"]], [self.vencida.pk])
+
+    def test_cobro_rapido_vuelve_al_listado(self):
+        volver = self.url + "?estado=ABIERTAS"
+        r = self.client.post(reverse("facturas:registrar_pago", args=[self.al_dia.pk]), {
+            "fecha": timezone.localdate().isoformat(), "forma": "TRANSFERENCIA", "monto": "200",
+            "referencia": "", "notas": "", "siguiente": volver,
+        })
+        self.assertRedirects(r, volver)
+        self.assertEqual(self.al_dia.pagos.count(), 1)
+
+    def test_cobro_rapido_no_redirige_fuera(self):
+        r = self.client.post(reverse("facturas:registrar_pago", args=[self.al_dia.pk]), {
+            "fecha": timezone.localdate().isoformat(), "forma": "TRANSFERENCIA", "monto": "10",
+            "referencia": "", "notas": "", "siguiente": "https://malicioso.test/",
+        })
+        self.assertEqual(r.url, self.al_dia.get_absolute_url())
+
+    def test_cobro_rapido_con_error_avisa(self):
+        r = self.client.post(reverse("facturas:registrar_pago", args=[self.al_dia.pk]), {
+            "fecha": timezone.localdate().isoformat(), "forma": "TRANSFERENCIA", "monto": "999",
+            "referencia": "", "notas": "", "siguiente": self.url,
+        }, follow=True)
+        self.assertContains(r, "No se registró el pago")
+        self.assertEqual(self.al_dia.pagos.count(), 0)
+
+    def test_cobrar_en_lote(self):
+        ids = f"{self.vencida.pk},{self.al_dia.pk},{self.pagada.pk}"
+        r = self.client.post(reverse("facturas:cobrar_lote"), {
+            "ids": ids, "fecha": timezone.localdate().isoformat(), "forma": "DEPOSITO", "referencia": "Dep 1",
+            "siguiente": self.url,
+        })
+        self.assertRedirects(r, self.url)
+        estados = {f.pk: f.estado for f in Factura.objects.con_saldos()}
+        self.assertTrue(all(e == "PAGADA" for e in estados.values()))
+        self.assertEqual(Pago.objects.count(), 3)  # la ya pagada no recibe otro pago
+
+    def test_exportar_seleccionadas(self):
+        r = self.client.get(reverse("facturas:exportar") + f"?ids={self.vencida.pk},{self.al_dia.pk}")
+        wb = openpyxl.load_workbook(BytesIO(r.content))
+        self.assertEqual(wb.active.max_row, 3)  # encabezado + 2
+
+    def test_numero_manual_duplicado_en_otra_forma(self):
+        r = self.client.post(reverse("facturas:nueva"), {
+            "tipo": "FACTURA", "numero": "001-001-676", "cliente": self.cliente.pk,
+            "periodo": timezone.localdate().strftime("%Y-%m"), "fecha_emision": timezone.localdate().isoformat(),
+            "dias_credito": 30, "fecha_cobro": "", "objeto": "x", "subtotal": "10", "porcentaje_iva": "15", "notas": "",
+        })
+        self.assertContains(r, "Ya existe el documento 001-001-000000676")

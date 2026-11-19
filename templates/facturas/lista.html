@@ -2,52 +2,200 @@
 {% block title %}Facturas{% endblock %}
 {% block content %}
 <div class="encabezado">
-  <h1>Facturas</h1>
   <div>
-    <a class="boton" href="{% url 'facturas:exportar' %}?{{ filtros }}">Exportar a Excel</a>
+    <h1>Facturas</h1>
+    <span class="tenue">{{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}{% if estado_actual or chips or form.q.value %} con los filtros actuales{% endif %}</span>
+  </div>
+  <div class="acciones-encabezado">
+    <a class="boton" href="{% url 'facturas:exportar' %}?{{ filtros }}" title="Descarga lo que ves en pantalla">⤓ Exportar</a>
+    <a class="boton" href="{% url 'facturas:importar' %}">Importar</a>
     <a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>
   </div>
 </div>
 
-<form method="get" class="filtros tarjeta">
-  {% for campo in form %}<label>{{ campo.label }} {{ campo }}</label>{% endfor %}
-  <button class="boton">Filtrar</button>
-  {% if filtros %}<a href="{% url 'facturas:lista' %}">Limpiar</a>{% endif %}
+<nav class="pestanas" aria-label="Filtrar por estado">
+  {% for p in pestanas %}
+  <a href="{% url_con estado=p.clave %}" class="pestana {{ p.clave|lower|default:'todas' }} {% if p.clave == estado_actual %}activa{% endif %}" {% if p.clave == estado_actual %}aria-current="page"{% endif %}>
+    <span>{{ p.nombre }}</span>
+    <b>{{ p.n }}</b>
+    {% if p.clave and p.n %}<small>{{ p.monto|dinero }}</small>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+
+<form method="get" class="tarjeta barra-busqueda" id="filtros-facturas">
+  {% if estado_actual %}<input type="hidden" name="estado" value="{{ estado_actual }}">{% endif %}
+  {% if orden != "-emision" %}<input type="hidden" name="orden" value="{{ orden }}">{% endif %}
+  {% if por_pagina != 50 %}<input type="hidden" name="por_pagina" value="{{ por_pagina }}">{% endif %}
+  <div class="busqueda">
+    <span class="lupa" aria-hidden="true">⌕</span>
+    {{ form.q }}
+    <kbd title="Pulsa / para buscar">/</kbd>
+  </div>
+  <details class="mas-filtros" {% if mas_filtros_abiertos %}open{% endif %}>
+    <summary class="boton">Filtros{% if chips %} <b class="contador">{{ chips|length }}</b>{% endif %}</summary>
+    <div class="panel-mas-filtros">
+      <label>Cliente {{ form.cliente }}</label>
+      <label>Emitida desde {{ form.emitida_desde }}</label>
+      <label>hasta {{ form.emitida_hasta }}</label>
+      <label>Periodo desde {{ form.desde }}</label>
+      <label>hasta {{ form.hasta }}</label>
+      <div class="acciones-filtro"><button class="boton primario">Aplicar</button></div>
+    </div>
+  </details>
+  <noscript><button class="boton primario">Buscar</button></noscript>
 </form>
 
-<div class="totales">
-  <span>{{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}</span>
-  <span>Facturado <strong>{{ totales.suma_total|dinero }}</strong></span>
-  <span>Cobrado <strong>{{ totales.suma_pagado|dinero }}</strong></span>
-  <span>Saldo <strong>{{ totales.suma_saldo|dinero }}</strong></span>
+{% if chips or form.q.value %}
+<div class="chips">
+  {% if form.q.value %}<a class="chip" href="{% url_con q=None %}">Búsqueda: «{{ form.q.value }}» <span aria-label="Quitar">×</span></a>{% endif %}
+  {% for texto, url in chips %}<a class="chip" href="{{ url }}">{{ texto }} <span aria-label="Quitar">×</span></a>{% endfor %}
+  <a class="enlace" href="{% url 'facturas:lista' %}{% if estado_actual %}?estado={{ estado_actual }}{% endif %}">Limpiar todo</a>
+</div>
+{% endif %}
+
+<div class="resumen-lista">
+  <div><span>Facturado</span><strong>{{ totales.suma_total|dinero }}</strong></div>
+  <div><span>Cobrado</span><strong class="verde">{{ totales.suma_pagado|dinero }}</strong></div>
+  <div><span>Saldo pendiente</span><strong>{{ totales.suma_saldo|dinero }}</strong></div>
 </div>
 
 <div class="tarjeta sin-relleno desplazable">
-<table class="lista">
+<table class="lista facturas" id="tabla-facturas">
   <thead>
-    <tr><th>Número</th><th>Periodo</th><th>Emisión</th><th>Cliente</th><th>Objeto</th><th>Cobro</th>
-        <th class="num">Valor</th><th class="num">IVA</th><th class="num">Total</th><th class="num">Saldo</th><th>Estado</th></tr>
+    <tr>
+      <th class="sel"><input type="checkbox" id="sel-todas" aria-label="Seleccionar todas las de esta página"></th>
+      {% columna "numero" "Factura" %}
+      {% columna "cliente" "Cliente" %}
+      {% columna "emision" "Emisión" "ocultar-movil" %}
+      {% columna "vence" "Vence" %}
+      {% columna "total" "Total" "num" %}
+      {% columna "saldo" "Saldo" "num" %}
+      <th>Estado</th>
+      <th class="acciones-col"><span class="sr">Acciones</span></th>
+    </tr>
   </thead>
   <tbody>
   {% for f in pagina %}
-    <tr class="{% if f.anulada %}tachada{% endif %}">
-      <td><a href="{{ f.get_absolute_url }}">{{ f.numero }}</a></td>
-      <td>{{ f.periodo|date:"m/Y" }}</td>
-      <td>{{ f.fecha_emision|date:"d/m/Y" }}</td>
-      <td>{% if f.cliente %}<a href="{{ f.cliente.get_absolute_url }}">{{ f.cliente }}</a>{% else %}—{% endif %}</td>
-      <td class="recorte" title="{{ f.objeto }}">{{ f.objeto }}</td>
-      <td>{{ f.fecha_cobro|date:"d/m/Y" }}</td>
-      <td class="num">{{ f.subtotal|dinero }}</td>
-      <td class="num">{{ f.iva|dinero }}</td>
+    <tr class="fila {% if f.anulada %}tachada{% endif %}" data-url="{{ f.get_absolute_url }}">
+      <td class="sel">
+        {% if not f.anulada %}<input type="checkbox" class="sel-fila" value="{{ f.pk }}" data-saldo="{{ f.saldo|floatformat:'2u' }}" data-numero="{{ f.numero }}" aria-label="Seleccionar {{ f.numero }}">{% endif %}
+      </td>
+      <td class="nowrap">
+        <a class="numero" href="{{ f.get_absolute_url }}">{{ f.numero }}</a>
+        <small class="tenue bloque">{{ f.periodo|periodo }}{% if f.tipo == "RECIBO" %} · Recibo{% endif %}</small>
+      </td>
+      <td class="cliente-celda">
+        {% if f.cliente %}<a href="{{ f.cliente.get_absolute_url }}">{{ f.cliente }}</a>{% else %}<span class="tenue">Sin cliente</span>{% endif %}
+        {% if f.objeto %}<small class="tenue bloque recorte" title="{{ f.objeto }}">{{ f.objeto }}</small>{% endif %}
+      </td>
+      <td class="nowrap ocultar-movil">{{ f.fecha_emision|date:"d/m/Y" }}</td>
+      <td class="nowrap">
+        {{ f.fecha_cobro|date:"d/m/Y"|default:"—" }}
+        {% if f.estado == "VENCIDA" %}<small class="bloque rojo">hace {{ f.dias_vencida }} día{{ f.dias_vencida|pluralize }}</small>
+        {% elif f.estado == "PENDIENTE" or f.estado == "PARCIAL" %}
+          {% if f.dias_para_cobro == 0 %}<small class="bloque ambar">vence hoy</small>
+          {% elif f.dias_para_cobro <= 7 %}<small class="bloque ambar">en {{ f.dias_para_cobro }} día{{ f.dias_para_cobro|pluralize }}</small>
+          {% else %}<small class="bloque tenue">en {{ f.dias_para_cobro }} días</small>{% endif %}
+        {% endif %}
+      </td>
       <td class="num">{{ f.total|dinero }}</td>
-      <td class="num">{% if f.anulada %}—{% else %}{{ f.saldo|dinero }}{% endif %}</td>
+      <td class="num">
+        {% if f.anulada %}—{% else %}
+          <strong>{{ f.saldo|dinero }}</strong>
+          {% if f.pagado and f.saldo > 0 %}<span class="progreso" title="{{ f.pct_cobrado }} % cobrado"><i style="width: {{ f.pct_cobrado }}%"></i></span>{% endif %}
+        {% endif %}
+      </td>
       <td>{% estado f.estado %}</td>
+      <td class="acciones-col">
+        {% if not f.anulada and f.saldo > 0 %}
+        <button type="button" class="boton chico cobrar" data-url="{% url 'facturas:registrar_pago' f.pk %}"
+          data-numero="{{ f.numero }}" data-cliente="{{ f.cliente|default:'' }}" data-saldo="{{ f.saldo|floatformat:'2u' }}">Cobrar</button>
+        {% endif %}
+      </td>
     </tr>
   {% empty %}
-    <tr><td colspan="11" class="tenue centro">No hay facturas con esos filtros.</td></tr>
+    <tr><td colspan="9" class="vacio-tabla">
+      <strong>No hay facturas{% if estado_actual or chips or form.q.value %} con estos filtros{% endif %}.</strong>
+      {% if estado_actual or chips or form.q.value %}<a href="{% url 'facturas:lista' %}">Ver todas</a>{% else %}<a href="{% url 'facturas:importar' %}">Importa el reporte de FactureroMovil</a> o <a href="{% url 'facturas:nueva' %}">registra una factura</a>.{% endif %}
+    </td></tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
-{% include "_paginacion.html" %}
+
+<div class="pie-lista">
+  <span class="tenue">{% if pagina.paginator.count %}{{ pagina.start_index }}–{{ pagina.end_index }} de {{ pagina.paginator.count }}{% endif %}</span>
+  {% if pagina.has_other_pages %}
+  <nav class="paginas" aria-label="Páginas">
+    {% if pagina.has_previous %}<a href="{% url_con page=pagina.previous_page_number %}" aria-label="Anterior">‹</a>{% endif %}
+    {% for n in rango_paginas %}
+      {% if n == pagina.paginator.ELLIPSIS %}<span>…</span>
+      {% elif n == pagina.number %}<span class="actual" aria-current="page">{{ n }}</span>
+      {% else %}<a href="{% url_con page=n %}">{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if pagina.has_next %}<a href="{% url_con page=pagina.next_page_number %}" aria-label="Siguiente">›</a>{% endif %}
+  </nav>
+  {% endif %}
+  <span class="por-pagina">Mostrar
+    {% for t in tamanos %}{% if t == por_pagina %}<b>{{ t }}</b>{% else %}<a href="{% url_con por_pagina=t %}">{{ t }}</a>{% endif %}{% endfor %}
+  </span>
+</div>
+
+<!-- Barra de selección múltiple -->
+<div class="barra-seleccion" id="barra-seleccion" hidden>
+  <span><b id="sel-n">0</b> seleccionada(s) · saldo <b id="sel-saldo">$0.00</b></span>
+  <button type="button" class="boton" id="sel-exportar">⤓ Exportar</button>
+  <button type="button" class="boton primario" id="sel-cobrar">Marcar como cobradas</button>
+  <button type="button" class="enlace" id="sel-limpiar">Quitar selección</button>
+</div>
+
+<!-- Diálogo: cobrar una factura -->
+<dialog id="dlg-cobro" class="dialogo">
+  <form method="post" id="form-cobro">
+    {% csrf_token %}
+    <input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+    <h2>Registrar cobro</h2>
+    <p class="tenue" id="cobro-info"></p>
+    <div class="campos-dialogo">
+      <label>Monto <input type="number" name="monto" step="0.01" min="0.01" required id="cobro-monto"></label>
+      <label>Fecha <input type="date" name="fecha" value="{{ hoy|date:'Y-m-d' }}" required></label>
+      <label>Forma de pago
+        <select name="forma">{% for v, t in formas_pago %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select>
+      </label>
+      <label>Referencia <input type="text" name="referencia" maxlength="100" placeholder="Nº de transferencia, cheque…"></label>
+    </div>
+    <input type="hidden" name="notas" value="">
+    <div class="acciones">
+      <button type="button" class="boton" data-cerrar>Cancelar</button>
+      <button class="boton primario">Registrar cobro</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Diálogo: cobrar varias -->
+<dialog id="dlg-lote" class="dialogo">
+  <form method="post" action="{% url 'facturas:cobrar_lote' %}">
+    {% csrf_token %}
+    <input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+    <input type="hidden" name="ids" id="lote-ids">
+    <h2>Marcar como cobradas</h2>
+    <p class="tenue">Se registrará un pago por el <strong>saldo completo</strong> de <b id="lote-n"></b> factura(s): <b id="lote-total"></b>.</p>
+    <div class="campos-dialogo">
+      <label>Fecha del cobro <input type="date" name="fecha" value="{{ hoy|date:'Y-m-d' }}" required></label>
+      <label>Forma de pago
+        <select name="forma">{% for v, t in formas_pago %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select>
+      </label>
+      <label class="ancho">Referencia <input type="text" name="referencia" maxlength="100" placeholder="Opcional"></label>
+    </div>
+    <div class="acciones">
+      <button type="button" class="boton" data-cerrar>Cancelar</button>
+      <button class="boton primario">Confirmar cobro</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/facturas_lista.js' %}" data-exportar="{% url 'facturas:exportar' %}"></script>
 {% endblock %}

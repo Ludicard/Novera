@@ -14,9 +14,13 @@
   <div class="kpi"><span>A importar</span><strong>{{ resumen.filas }}</strong><small>{{ resumen.clientes_nuevos }} clientes nuevos</small></div>
   <div class="kpi"><span>Pagadas / pendientes / anuladas</span><strong>{{ resumen.pagadas }} / {{ resumen.pendientes }} / {{ resumen.anuladas }}</strong></div>
   <div class="kpi"><span>Facturado / quedaría por cobrar</span><strong>{{ resumen.facturado|dinero }}</strong><small>{{ resumen.por_cobrar|dinero }} por cobrar</small></div>
+  <div class="kpi neutro"><span>Ya están en Novera</span><strong>{{ resumen.ya_existen }}</strong><small>se saltan, no se duplican</small></div>
   <div class="kpi alerta"><span>Con avisos / omitidas</span><strong>{{ resumen.con_avisos }} / {{ resumen.omitidas }}</strong></div>
 </section>
 
+{% if resumen.filas == 0 and resumen.ya_existen %}
+<div class="mensaje">Todas las facturas de este archivo ya están en Novera: no hay nada nuevo que importar.</div>
+{% endif %}
 <label class="interruptor"><input type="checkbox" id="solo-avisos"> Mostrar solo filas con avisos</label>
 <div class="tarjeta sin-relleno desplazable">
 <table class="lista" id="preview">

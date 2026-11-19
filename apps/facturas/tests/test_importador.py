@@ -99,7 +99,7 @@ class ImportacionTests(TestCase):
         self.assertEqual(Factura.objects.count(), 0, "analizar no debe escribir")
 
         creados = imp.aplicar(resultado)
-        self.assertEqual(creados, {"clientes": 3, "facturas": 5, "pagos": 1})
+        self.assertEqual(creados, {"clientes": 3, "facturas": 5, "pagos": 1, "saltadas": 0})
 
         f71 = Factura.objects.get(numero="001-001-000000071")
         self.assertEqual(f71.cliente.nombre, "Edificio Central")
@@ -119,7 +119,7 @@ class ImportacionTests(TestCase):
         imp.aplicar(imp.analizar(self.ruta))
         segundo = imp.analizar(self.ruta)
         self.assertEqual(segundo.importables, [])
-        self.assertEqual(imp.aplicar(segundo), {"clientes": 0, "facturas": 0, "pagos": 0})
+        self.assertEqual(imp.aplicar(segundo), {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0})
 
     def test_desconocidas_como_pagadas(self):
         imp.aplicar(imp.analizar(self.ruta, estado_desconocido="pagada"))
@@ -142,7 +142,8 @@ ENCABEZADO_FM = [
 
 def fila_fm(fecha, numero, base, iva, total, ruc, cliente, info="", estado="Autorizado SRI",
             por_cobrar="NO", saldo=0.0, cobrada="N/A", plazo=0):
-    return [fecha, numero, "0" * 49, base, 0.0, 0.0, 0.0, 0.0, iva, 0.0, 0.0, 0.0, 0.0, total, ruc, cliente,
+    clave = numero.replace("-", "").rjust(49, "0")
+    return [fecha, numero, clave, base, 0.0, 0.0, 0.0, 0.0, iva, 0.0, 0.0, 0.0, 0.0, total, ruc, cliente,
             estado, "NO", por_cobrar, saldo, cobrada, info, None, plazo, "OTROS CON UTILIZACION DEL SISTEMA FINANCIERO",
             total, None]
 
@@ -231,3 +232,78 @@ class FactureroMovilTests(TestCase):
         ruta = Path(tempfile.mkdtemp()) / "x.xlsx"
         wb.save(ruta)
         self.assertIn("No se reconoce el formato", imp.analizar(ruta).errores[0])
+
+
+def crear_excel(filas):
+    """Excel histórico mínimo (hoja «Facturas»)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Facturas"
+    ws.append(ENCABEZADO)
+    for f in filas:
+        ws.append(f)
+    ruta = Path(tempfile.mkdtemp()) / "base.xlsx"
+    wb.save(ruta)
+    return ruta
+
+
+class DuplicadosTests(TestCase):
+    def reporte(self, numeros, clave=None):
+        filas = []
+        for n in numeros:
+            fila = fila_fm("2025-03-03", f"001-001-{n:09d}", 100.0, 15.0, 115.0, "1790000001001", "EDIFICIO CENTRAL")
+            fila[2] = clave or f"{n:049d}"
+            filas.append(fila)
+        return excel_facturero(filas)
+
+    def test_clave_numero(self):
+        from apps.facturas.models import clave_numero
+        self.assertEqual(clave_numero("676"), "001-001-000000676")
+        self.assertEqual(clave_numero("001-001-676"), "001-001-000000676")
+        self.assertEqual(clave_numero(" 001-001-000000676 "), "001-001-000000676")
+        self.assertEqual(clave_numero("Recibo  066"), "recibo 066")
+
+    def test_reimportar_el_mismo_archivo(self):
+        ruta = self.reporte([101, 102, 103])
+        imp.aplicar(imp.analizar(ruta))
+        r = imp.analizar(ruta)
+        self.assertEqual(r.importables, [])
+        self.assertEqual(r.resumen()["ya_existen"], 3)
+        self.assertEqual(Factura.objects.count(), 3)
+
+    def test_archivos_que_se_solapan(self):
+        imp.aplicar(imp.analizar(self.reporte([101, 102, 103])))
+        r = imp.analizar(self.reporte([102, 103, 104, 105]))
+        self.assertEqual([f.numero for f in r.importables], ["001-001-000000104", "001-001-000000105"])
+        imp.aplicar(r)
+        self.assertEqual(Factura.objects.count(), 5)
+
+    def test_numero_escrito_distinto_ya_existente(self):
+        Factura.objects.create(numero="101", periodo=date(2025, 3, 1), fecha_emision=date(2025, 3, 3),
+                               subtotal=100, total=115)
+        r = imp.analizar(self.reporte([101, 102]))
+        self.assertEqual([f.numero for f in r.importables], ["001-001-000000102"])
+
+    def test_misma_clave_de_acceso_con_otro_numero(self):
+        imp.aplicar(imp.analizar(self.reporte([101], clave="9" * 49)))
+        self.assertEqual(imp.analizar(self.reporte([555], clave="9" * 49)).importables, [])
+
+    def test_repetida_dentro_del_archivo(self):
+        r = imp.analizar(self.reporte([101, 101]))
+        self.assertEqual(len(r.importables), 1)
+        self.assertIn("Repetida en el archivo", r.omitidas[0].avisos)
+
+    def test_confirmar_dos_veces_no_duplica(self):
+        r = imp.analizar(self.reporte([101, 102]))
+        imp.aplicar(r)
+        segunda = imp.aplicar(r)  # misma vista previa confirmada otra vez
+        self.assertEqual((segunda["facturas"], segunda["saltadas"]), (0, 2))
+        self.assertEqual(Factura.objects.count(), 2)
+
+    def test_historico_y_luego_facturero(self):
+        imp.aplicar(imp.analizar(crear_excel([
+            ["001-001-000000101", "Marzo", date(2025, 3, 3), "Factura", "Edificio Central", "Mtto",
+             None, 100, 15, 115, "No Pagada"],
+        ])))
+        r = imp.analizar(self.reporte([101, 102]))
+        self.assertEqual([f.numero for f in r.importables], ["001-001-000000102"])
