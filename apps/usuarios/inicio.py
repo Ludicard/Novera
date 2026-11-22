@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.facturas.models import Estado, Factura
-from apps.trabajos.models import OrdenTrabajo, Tarea
+from apps.trabajos.models import OrdenTrabajo, Proforma, Tarea
 
 from .permisos import requiere_rol
 from .roles import ADMINISTRADOR, MANAGER, ROLES, TECNICO
@@ -30,11 +30,21 @@ def _mosaicos(request):
     abiertas = OrdenTrabajo.objects.filter(estado__in=ABIERTAS)
     sin_tecnico = abiertas.filter(tareas__isnull=True).count()
     vencidas = Factura.objects.con_saldos(hoy).filter(estado=Estado.VENCIDA).count()
+    if request.rol == ADMINISTRADOR:
+        # El Administrador lleva las proformas; los clientes los administra el Manager (gerente)
+        por_responder = Proforma.objects.filter(estado__in=[Proforma.Estado.BORRADOR, Proforma.Estado.ENVIADA]).count()
+        primero = {
+            "icono": "proforma", "titulo": "Administrar proformas", "url": reverse("trabajos:proformas"), "color": "verde",
+            "dato": "Cotizaciones: crear, enviar y aprobar",
+            "alerta": f"{por_responder} por responder" if por_responder else "",
+        }
+    else:
+        primero = {"icono": "cliente", "titulo": "Administrar clientes", "url": reverse("clientes:lista"), "color": "verde",
+                   "dato": "Datos, RUC, contacto y estado de cuenta"}
     return [
-        {"icono": "cliente", "titulo": "Administrar clientes", "url": reverse("clientes:lista"), "color": "verde",
-         "dato": "Datos, RUC, contacto y estado de cuenta"},
+        primero,
         {"icono": "orden", "titulo": "Órdenes de trabajo", "url": reverse("trabajos:ordenes"), "color": "azul",
-         "dato": f"{abiertas.count()} abierta{'s' if abiertas.count() != 1 else ''} · proformas"},
+         "dato": f"{abiertas.count()} abierta{'s' if abiertas.count() != 1 else ''}"},
         {"icono": "asignar", "titulo": "Asignar tareas", "url": reverse("trabajos:asignar"), "color": "naranja",
          "dato": "Qué técnico hace qué orden",
          "alerta": f"{sin_tecnico} sin técnico" if sin_tecnico else ""},

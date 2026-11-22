@@ -158,11 +158,26 @@ class PermisosPorRolTests(TestCase):
         entrar_como(self.client, jefa, ADMINISTRADOR)
         r = self.client.get(reverse("inicio"))
         self.assertEqual([m["titulo"] for m in r.context["mosaicos"]], [
-            "Administrar clientes", "Órdenes de trabajo", "Asignar tareas", "Cargar datos financieros",
+            "Administrar proformas", "Órdenes de trabajo", "Asignar tareas", "Cargar datos financieros",
             "Revisar información general",
         ])
         for m in r.context["mosaicos"]:
             self.assertEqual(self.client.get(m["url"]).status_code, 200, m["url"])
+        # El Administrador sigue pudiendo entrar a clientes (solo cambia el menú)
+        self.assertEqual(self.client.get(reverse("clientes:lista")).status_code, 200)
+        # El Manager (gerente) es quien tiene «Administrar clientes» en su menú
+        mana = User.objects.create_user("mana", password=CLAVE)
+        entrar_como(self.client, mana, MANAGER)
+        r = self.client.get(reverse("inicio"))
+        self.assertEqual(r.context["mosaicos"][0]["titulo"], "Administrar clientes")
+        self.assertNotIn("Administrar proformas", [m["titulo"] for m in r.context["mosaicos"]])
+
+    def test_aviso_de_proformas_por_responder(self):
+        jefa = User.objects.create_user("jefa", password=CLAVE)
+        entrar_como(self.client, jefa, ADMINISTRADOR)
+        Proforma.objects.create(cliente=self.cliente, titulo="Cotización pendiente")
+        r = self.client.get(reverse("inicio"))
+        self.assertEqual(r.context["mosaicos"][0]["alerta"], "1 por responder")
 
     def test_manager_gestiona_ordenes_pero_no_usuarios(self):
         mana = User.objects.create_user("mana", password=CLAVE)
