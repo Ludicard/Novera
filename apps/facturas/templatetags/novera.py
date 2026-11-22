@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal, InvalidOperation
 
 from django import template
@@ -69,3 +70,13 @@ def columna(context, clave, etiqueta, clase=""):
         clase, "activo" if activo else "", ("descending" if desc else "ascending") if activo else "none",
         url, etiqueta, flecha,
     )
+
+
+_MES_SERVICIO = re.compile(r"^\s*me\s*s\w*\s+d\w*\s+(serv|serr|seri|asc)\w*\s*:", re.IGNORECASE)
+
+
+@register.filter
+def objeto_corto(objeto):
+    """Quita «Mes del Servicio: X» (ya se ve como periodo) del concepto importado."""
+    partes = [p.strip() for p in (objeto or "").split("|")]
+    return " | ".join(p for p in partes if p and not _MES_SERVICIO.match(p))

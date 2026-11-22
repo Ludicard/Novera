@@ -40,4 +40,29 @@
   // Si la fecha de cobro ya escrita no es emisión + días, se respeta como manual.
   cobroManual = cobro.value !== "" && cobro.value !== calcularCobro();
   fechaCobro();
+
+  // Alta rápida de cliente sin salir de la factura
+  const dlg = document.getElementById("dlg-cliente");
+  const abrir = document.getElementById("abrir-cliente");
+  if (dlg && abrir) {
+    const fc = document.getElementById("form-cliente");
+    const errores = document.getElementById("cliente-errores");
+    abrir.addEventListener("click", () => { errores.hidden = true; fc.reset(); dlg.showModal(); fc.nombre.focus(); });
+    dlg.querySelector("[data-cerrar]").addEventListener("click", () => dlg.close());
+    fc.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const r = await fetch(fc.dataset.url, { method: "POST", body: new FormData(fc), headers: { "X-Requested-With": "fetch" } });
+      const datos = await r.json().catch(() => ({ errores: { __all__: ["No se pudo crear el cliente."] } }));
+      if (!r.ok) {
+        errores.textContent = Object.values(datos.errores || {}).flat().join(" ");
+        errores.hidden = false;
+        return;
+      }
+      const opcion = new Option(datos.nombre, datos.id, true, true);
+      cliente.add(opcion);
+      diasClientes[datos.id] = datos.dias_credito;
+      cliente.dispatchEvent(new Event("change"));
+      dlg.close();
+    });
+  }
 })();

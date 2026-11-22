@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load static %}
+{% extends "base.html" %}
 {% block title %}Selecciona tu rol{% endblock %}
-{% block barra %}{% endblock %}
+{% block barra %}{% if rol %}{{ block.super }}{% endif %}{% endblock %}
 {% block content %}
 <div class="eleccion-rol">
+  {% if not rol %}
   <div class="marca-grande">
     <svg viewBox="0 0 48 48" aria-hidden="true">
       <rect x="2" y="2" width="44" height="44" rx="12" fill="var(--primario)"/>
@@ -11,22 +12,31 @@
     <span>Novera</span>
   </div>
   <p class="saludo">Hola, {{ user.get_short_name|default:user.username }}</p>
-  <h1>Selecciona tu rol</h1>
+  {% endif %}
+  <h1 id="titulo-roles">{% if rol %}Cambiar de rol{% else %}Selecciona tu rol{% endif %}</h1>
   {% if error %}<div class="mensaje error">{{ error }}</div>{% endif %}
 
-  <form method="post" class="roles">
+  <form method="post" class="roles" aria-labelledby="titulo-roles">
     {% csrf_token %}
     {% if siguiente %}<input type="hidden" name="siguiente" value="{{ siguiente }}">{% endif %}
     {% for o in opciones %}
-    <button class="rol-opcion {{ o.clave }}" name="rol" value="{{ o.clave }}" {% if forloop.first %}autofocus{% endif %}>
+    <button class="rol-opcion {{ o.clave }}{% if o.sugerido %} sugerido{% endif %}" name="rol" value="{{ o.clave }}"
+            aria-describedby="desc-{{ o.clave }}" {% if o.sugerido %}autofocus{% endif %}>
       <span class="rol-icono">{% include "usuarios/_icono_rol.html" with clave=o.clave %}</span>
-      <span class="rol-texto"><strong>{{ o.nombre }}</strong><small>{{ o.descripcion }}</small></span>
+      <span class="rol-texto">
+        <strong>{{ o.nombre }}{% if o.actual %} <em class="etiqueta">Rol actual</em>{% elif o.ultimo %} <em class="etiqueta">Último usado</em>{% endif %}</strong>
+        <small id="desc-{{ o.clave }}">{{ o.descripcion }}</small>
+      </span>
       <span class="rol-flecha" aria-hidden="true">›</span>
     </button>
     {% endfor %}
   </form>
 
-  <p class="ayuda">¿Necesitas otro rol? <span>Pídeselo a un Administrador.</span></p>
-  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="enlace">Cerrar sesión</button></form>
+  {% if rol %}
+  <p class="ayuda"><a href="{{ siguiente|default:'/' }}">← Volver sin cambiar</a></p>
+  {% else %}
+  {% if not es_admin %}<p class="ayuda">¿Necesitas otro rol? <span>Pídeselo a un Administrador.</span></p>{% endif %}
+  <form method="post" action="{% url 'logout' %}" class="ayuda">{% csrf_token %}<button class="enlace">Cerrar sesión</button></form>
+  {% endif %}
 </div>
 {% endblock %}

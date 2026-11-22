@@ -345,7 +345,7 @@ class Resultado:
         claves_nuevas = nuevos | (set(self.catalogo) - claves)
         return {
             "filas": len(filas),
-            "omitidas": len(self.omitidas),
+            "omitidas": sum(1 for f in self.omitidas if not f.ya_existe),
             "ya_existen": sum(1 for f in self.filas if f.ya_existe),
             "con_avisos": len(self.con_avisos),
             "pagadas": sum(1 for f in filas if f.accion == "pagada"),
@@ -457,7 +457,8 @@ def _leer_info_adicional(info):
         else:
             # «Mes del Servicio», con sus erratas («Mes ddel Servicio», «Me s del Servicio», …)
             if compacta.startswith("mes") and not datos["mes"] and _nombra_un_mes(valor):
-                datos["mes"] = valor
+                datos["mes"] = valor  # va al periodo; no se repite en el objeto
+                continue
             extras.append(f"{clave}: {valor}")
     return datos, extras
 

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.clientes.models import Cliente
@@ -46,9 +47,9 @@ class FacturaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["cliente"].required = True
-        self.fields["cliente"].queryset = Cliente.objects.filter(activo=True) | Cliente.objects.filter(
-            pk=getattr(self.instance, "cliente_id", None)
-        )
+        # Clientes activos, más el de la factura o el elegido de antemano aunque esté inactivo
+        incluir = {getattr(self.instance, "cliente_id", None), getattr(self.initial.get("cliente"), "pk", None)}
+        self.fields["cliente"].queryset = Cliente.objects.filter(Q(activo=True) | Q(pk__in=[x for x in incluir if x]))
         if self.instance.pk:
             tasa = str(int(self.instance.porcentaje_iva)) if self.instance.porcentaje_iva % 1 == 0 else None
             if tasa and tasa not in dict(TASAS_IVA):
@@ -75,6 +76,16 @@ class FacturaForm(forms.ModelForm):
         emision, cobro = datos.get("fecha_emision"), datos.get("fecha_cobro")
         if emision and cobro and cobro < emision:
             self.add_error("fecha_cobro", "La fecha de cobro no puede ser anterior a la emisión.")
+        subtotal, pct = datos.get("subtotal"), datos.get("porcentaje_iva")
+        if self.instance.pk and subtotal is not None and pct is not None:
+            total = redondear(subtotal + redondear(subtotal * pct / 100))
+            pagado = self.instance.total_pagado()
+            if total < pagado:
+                self.add_error(
+                    "subtotal",
+                    f"El nuevo total (${total:,.2f}) sería menor que lo ya cobrado (${pagado:,.2f}). "
+                    "Elimina o corrige los pagos primero.",
+                )
         return datos
 
     def save(self, commit=True):
@@ -105,7 +116,7 @@ class PagoForm(forms.ModelForm):
         monto = self.cleaned_data["monto"]
         saldo = self.factura.saldo_pendiente()
         if monto > saldo:
-            raise forms.ValidationError(f"El pago supera el saldo pendiente (${saldo}).")
+            raise forms.ValidationError(f"El pago supera el saldo pendiente (${saldo:,.2f}).")
         return monto
 
     def clean(self):
@@ -115,16 +126,35 @@ class PagoForm(forms.ModelForm):
 
 
 class CobroLoteForm(forms.Form):
-    ids = forms.CharField()
-    fecha = forms.DateField(widget=FECHA)
+    FECHA_ELEGIDA, FECHA_VENCIMIENTO, FECHA_EMISION = "elegida", "vencimiento", "emision"
+
+    ids = forms.CharField(required=False)
+    todas = forms.BooleanField(required=False)  # todas las facturas que cumplen los filtros, no solo la página
+    filtros = forms.CharField(required=False)    # query string del listado
+    fecha_modo = forms.ChoiceField(
+        choices=[
+            (FECHA_ELEGIDA, "Una misma fecha"),
+            (FECHA_VENCIMIENTO, "La fecha de vencimiento de cada factura"),
+            (FECHA_EMISION, "La fecha de emisión de cada factura"),
+        ],
+        initial=FECHA_ELEGIDA,
+        required=False,
+    )
+    fecha = forms.DateField(widget=FECHA, required=False)
     forma = forms.ChoiceField(choices=Pago.Forma.choices)
     referencia = forms.CharField(max_length=100, required=False)
 
     def clean_ids(self):
-        ids = [int(x) for x in self.cleaned_data["ids"].split(",") if x.strip().isdigit()]
-        if not ids:
+        return [int(x) for x in (self.cleaned_data["ids"] or "").split(",") if x.strip().isdigit()]
+
+    def clean(self):
+        datos = super().clean()
+        if not datos.get("todas") and not datos.get("ids"):
             raise forms.ValidationError("No hay facturas seleccionadas.")
-        return ids
+        datos["fecha_modo"] = datos.get("fecha_modo") or self.FECHA_ELEGIDA
+        if datos["fecha_modo"] == self.FECHA_ELEGIDA and not datos.get("fecha"):
+            self.add_error("fecha", "Indica la fecha del cobro.")
+        return datos
 
 
 class AnularForm(forms.Form):

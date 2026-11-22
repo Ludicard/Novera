@@ -17,19 +17,27 @@
     <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' and u != 'importar' %}class="activo"{% endif %}>Facturas</a>
     <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
     <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar</a>
+    {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}" {% if ns == 'usuarios' and u != 'elegir_rol' %}class="activo"{% endif %}>Usuarios</a>{% endif %}
     {% endwith %}
   </nav>
   {% else %}<span class="espaciador"></span>{% endif %}
   <div class="usuario">
-    {% if rol %}
-    <a class="rol-actual {{ rol }}" href="{% url 'usuarios:elegir_rol' %}" title="{% if puede_cambiar_rol %}Cambiar de rol{% else %}Tu rol{% endif %}">
-      <span class="rol-mini">{% include "usuarios/_icono_rol.html" with clave=rol %}</span>
-      <span>{{ user.get_short_name|default:user.username }} · <b>{{ rol_nombre }}</b>{% if puede_cambiar_rol %} <i aria-hidden="true">⇄</i>{% endif %}</span>
-    </a>
-    {% endif %}
-    {% if rol %}<a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>{% endif %}
-    {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="enlace">Salir</button></form>
+    {% if rol %}<a class="boton primario solo-escritorio" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>{% endif %}
+    <details class="menu-usuario">
+      <summary class="rol-actual {{ rol }}" aria-label="Menú de la cuenta">
+        {% if rol %}<span class="rol-mini">{% include "usuarios/_icono_rol.html" with clave=rol %}</span>{% endif %}
+        <span class="rol-texto-barra"><span class="solo-escritorio">{{ user.get_short_name|default:user.username }} · </span><b>{{ rol_nombre|default:"Sin rol" }}</b></span>
+        <i aria-hidden="true">▾</i>
+      </summary>
+      <div class="menu-panel">
+        <div class="menu-cabecera"><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ user.username }}{% if rol %} · {{ rol_nombre }}{% endif %}</small></div>
+        {% if puede_cambiar_rol %}<a href="{% url 'usuarios:elegir_rol' %}?siguiente={{ request.get_full_path|urlencode }}">⇄ Cambiar de rol</a>{% endif %}
+        {% if rol %}<a href="{% url 'password_change' %}">🔑 Cambiar mi contraseña</a>{% endif %}
+        {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}">👥 Usuarios y accesos</a>{% endif %}
+        {% if user.is_superuser %}<a href="{% url 'admin:index' %}">⚙ Admin avanzado</a>{% endif %}
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="salir">↩ Salir</button></form>
+      </div>
+    </details>
   </div>
 </header>
 {% endif %}{% endblock %}
@@ -37,6 +45,15 @@
   {% for m in messages %}<div class="mensaje {{ m.tags }}">{{ m }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>
+<script>
+// Menú de la cuenta: se cierra al hacer clic fuera o con Escape
+document.addEventListener("click", function (e) {
+  document.querySelectorAll("details.menu-usuario[open]").forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") document.querySelectorAll("details.menu-usuario[open]").forEach(function (d) { d.open = false; });
+});
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

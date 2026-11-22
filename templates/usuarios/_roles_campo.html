@@ -1,0 +1,15 @@
+{# Casillas de roles como tarjetas con icono #}
+<fieldset class="roles-campo{% if campo.errors %} con-error{% endif %}">
+  <legend>{{ campo.label }} *</legend>
+  <div class="roles-tarjetas">
+    {% for opcion in campo %}
+    <label class="rol-casilla {{ opcion.data.value }}">
+      {{ opcion.tag }}
+      <span class="rol-icono chico">{% include "usuarios/_icono_rol.html" with clave=opcion.data.value %}</span>
+      <span>{{ opcion.choice_label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <small>{{ campo.help_text }}</small>
+  {% for e in campo.errors %}<small class="error">{{ e }}</small>{% endfor %}
+</fieldset>

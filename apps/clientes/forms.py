@@ -17,4 +17,14 @@ class ClienteForm(forms.ModelForm):
         return nombre
 
     def clean_identificacion(self):
-        return self.cleaned_data["identificacion"].strip()
+        identificacion = self.cleaned_data["identificacion"].strip()
+        if identificacion:
+            otro = Cliente.objects.filter(identificacion=identificacion).exclude(pk=self.instance.pk).first()
+            if otro:
+                raise forms.ValidationError(f"Ese RUC/cédula ya es del cliente «{otro}».")
+        return identificacion
+
+
+class ClienteRapidoForm(ClienteForm):
+    class Meta(ClienteForm.Meta):
+        fields = ["nombre", "identificacion", "email", "dias_credito"]

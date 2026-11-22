@@ -16,9 +16,28 @@
   <div class="acciones">
     <button class="boton primario">Guardar</button>
     {% if not factura %}<button class="boton" name="otra" value="1">Guardar y registrar otra</button>{% endif %}
-    <a href="{% url 'clientes:nuevo' %}?next={{ request.path|urlencode }}">¿Cliente nuevo? Créalo aquí</a>
+    <button type="button" class="enlace" id="abrir-cliente">¿Cliente nuevo? Créalo aquí</button>
   </div>
 </form>
+
+<dialog id="dlg-cliente" class="dialogo">
+  <form id="form-cliente" data-url="{% url 'clientes:rapido' %}">
+    {% csrf_token %}
+    <h2>Nuevo cliente</h2>
+    <p class="tenue">Se creará y quedará elegido en esta factura. Lo demás lo completas luego en su ficha.</p>
+    <div class="campos-dialogo">
+      <label class="ancho">Nombre * <input name="nombre" required maxlength="200"></label>
+      <label>RUC / Cédula <input name="identificacion" maxlength="13" inputmode="numeric"></label>
+      <label>Días de crédito <input type="number" name="dias_credito" value="30" min="0" required></label>
+      <label class="ancho">Email <input type="email" name="email"></label>
+    </div>
+    <p class="mensaje error" id="cliente-errores" hidden></p>
+    <div class="acciones">
+      <button type="button" class="boton" data-cerrar>Cancelar</button>
+      <button class="boton primario">Crear y elegir</button>
+    </div>
+  </form>
+</dialog>
 {{ dias_clientes|json_script:"dias-clientes" }}
 {% endblock %}
 {% block scripts %}<script src="{% static 'js/factura_form.js' %}"></script>{% endblock %}

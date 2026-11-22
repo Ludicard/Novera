@@ -269,3 +269,91 @@ class ListadoTests(TestCase):
             "dias_credito": 30, "fecha_cobro": "", "objeto": "x", "subtotal": "10", "porcentaje_iva": "15", "notas": "",
         })
         self.assertContains(r, "Ya existe el documento 001-001-000000676")
+
+
+class CorreccionesRevisionTests(TestCase):
+    """Errores encontrados en la revisión del flujo de Administrador."""
+
+    def setUp(self):
+        self.user = User.objects.create_superuser("jefe", "j@x.test", "clave-segura-123")
+        entrar_como(self.client, self.user, "administrador")
+        self.cliente = Cliente.objects.create(nombre="Edificio Central", identificacion="1790000001001")
+        hoy = timezone.localdate()
+        self.f = Factura.objects.create(
+            numero="001-001-000000900", cliente=self.cliente, periodo=hoy, fecha_emision=hoy - timedelta(days=40),
+            dias_credito=30, subtotal=Decimal("100"), porcentaje_iva=Decimal("15"), iva=Decimal("15"), total=Decimal("115"),
+        )
+
+    def test_cliente_invalido_en_nueva_factura(self):
+        self.assertEqual(self.client.get(reverse("facturas:nueva") + "?cliente=abc").status_code, 200)
+
+    def test_cliente_inactivo_queda_elegido(self):
+        self.cliente.activo = False
+        self.cliente.save()
+        r = self.client.get(reverse("facturas:nueva") + f"?cliente={self.cliente.pk}")
+        self.assertIn(self.cliente, r.context["form"].fields["cliente"].queryset)
+        self.assertContains(r, "inactivo")
+
+    def test_no_se_puede_editar_por_debajo_de_lo_cobrado(self):
+        Pago.objects.create(factura=self.f, monto=Decimal("50"))
+        r = self.client.post(reverse("facturas:editar", args=[self.f.pk]), {
+            "tipo": "FACTURA", "numero": self.f.numero, "cliente": self.cliente.pk, "periodo": self.f.periodo.strftime("%Y-%m"),
+            "fecha_emision": self.f.fecha_emision.isoformat(), "dias_credito": 30, "fecha_cobro": "",
+            "objeto": "", "subtotal": "10", "porcentaje_iva": "15", "notas": "",
+        })
+        self.assertContains(r, "sería menor que lo ya cobrado")
+        self.f.refresh_from_db()
+        self.assertEqual(self.f.total, Decimal("115"))
+
+    def test_admin_recalcula_montos_y_valida_pagos(self):
+        r = self.client.post(reverse("admin:facturas_pago_add"), {
+            "factura": self.f.pk, "fecha": timezone.localdate().isoformat(), "forma": "OTRO", "monto": "500",
+            "referencia": "", "notas": "",
+        })
+        self.assertContains(r, "supera el saldo pendiente")
+        self.assertEqual(self.client.get(reverse("admin:facturas_factura_changelist")).status_code, 200)
+
+    def test_anular_dos_veces(self):
+        self.client.post(reverse("facturas:anular", args=[self.f.pk]), {"motivo": "Error"})
+        self.client.post(reverse("facturas:anular", args=[self.f.pk]), {"motivo": "Otra vez"})
+        self.f.refresh_from_db()
+        self.assertEqual(self.f.motivo_anulacion, "Error")
+
+    def test_cliente_nuevo_sin_redireccion_externa(self):
+        r = self.client.post(reverse("clientes:nuevo") + "?next=https://malicioso.test/", {
+            "nombre": "Torre Sur", "identificacion": "", "email": "", "telefono": "", "direccion": "",
+            "dias_credito": 30, "activo": "on", "notas": "",
+        })
+        self.assertFalse(r.url.startswith("http"))
+
+    def test_ruc_duplicado(self):
+        r = self.client.post(reverse("clientes:nuevo"), {
+            "nombre": "Otro nombre", "identificacion": "1790000001001", "email": "", "telefono": "",
+            "direccion": "", "dias_credito": 30, "activo": "on", "notas": "",
+        })
+        self.assertContains(r, "ya es del cliente")
+
+    def test_cliente_rapido_desde_la_factura(self):
+        r = self.client.post(reverse("clientes:rapido"), {"nombre": "Torre Norte", "identificacion": "", "email": "", "dias_credito": 15})
+        self.assertEqual(r.json()["dias_credito"], 15)
+        r = self.client.post(reverse("clientes:rapido"), {"nombre": "torre norte", "identificacion": "", "email": "", "dias_credito": 15})
+        self.assertEqual(r.status_code, 400)
+
+    def test_cobrar_todas_las_filtradas_con_fecha_de_vencimiento(self):
+        hoy = timezone.localdate()
+        for n in range(901, 904):
+            Factura.objects.create(
+                numero=f"001-001-{n:09d}", cliente=self.cliente, periodo=hoy, fecha_emision=hoy - timedelta(days=60),
+                dias_credito=30, subtotal=Decimal("10"), porcentaje_iva=0, iva=0, total=Decimal("10"),
+            )
+        r = self.client.post(reverse("facturas:cobrar_lote"), {
+            "todas": "1", "filtros": "estado=VENCIDA", "fecha_modo": "vencimiento", "forma": "OTRO", "referencia": "",
+        })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Pago.objects.count(), 4)
+        pago = Pago.objects.get(factura=self.f)
+        self.assertEqual(pago.fecha, self.f.fecha_cobro)
+
+    def test_filtro_invalido_no_anula_los_demas(self):
+        r = self.client.get(reverse("facturas:lista") + "?estado=VENCIDA&desde=2025-13")
+        self.assertEqual(r.context["pagina"].paginator.count, 1)

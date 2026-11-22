@@ -21,13 +21,49 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 .marca { font-weight: 700; font-size: 1.2rem; letter-spacing: .02em; opacity: 1 !important; }
 .usuario { display: flex; align-items: center; gap: 1rem; }
 .usuario form { margin: 0; }
+.usuario { flex-wrap: nowrap; }
 .espaciador { flex: 1; }
-.rol-actual { display: inline-flex; align-items: center; gap: .5rem; font-size: .9rem; opacity: 1 !important; padding: .2rem .7rem .2rem .25rem; border-radius: 99px; background: rgba(255,255,255,.1); }
-.rol-actual:hover { background: rgba(255,255,255,.2); }
+.menu-usuario { position: relative; }
+.rol-actual { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .5rem; font-size: .9rem; padding: .2rem .7rem .2rem .25rem; border-radius: 99px; background: rgba(255,255,255,.12); color: #fff; user-select: none; }
+.rol-actual::-webkit-details-marker { display: none; }
+.rol-actual:hover, .menu-usuario[open] .rol-actual { background: rgba(255,255,255,.22); }
 .rol-actual b { font-weight: 600; }
-.rol-actual i { font-style: normal; opacity: .7; }
-.rol-mini { width: 1.75rem; height: 1.75rem; border-radius: 99px; display: grid; place-items: center; background: #fff; }
+.rol-actual i { font-style: normal; opacity: .75; font-size: .75rem; }
+.rol-mini { width: 1.75rem; height: 1.75rem; border-radius: 99px; display: grid; place-items: center; background: #fff; flex: 0 0 auto; }
 .rol-mini svg { width: 1.2rem; height: 1.2rem; }
+.menu-panel { position: absolute; right: 0; top: calc(100% + .5rem); z-index: 30; min-width: 250px; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 12px; box-shadow: 0 12px 32px rgba(16,24,40,.18); padding: .4rem; display: flex; flex-direction: column; }
+.menu-panel a, .menu-panel .salir { color: var(--texto) !important; opacity: 1 !important; text-decoration: none; padding: .55rem .75rem; border-radius: 8px; font: inherit; text-align: left; background: none; border: 0; cursor: pointer; width: 100%; }
+.menu-panel a:hover, .menu-panel .salir:hover { background: var(--fondo); }
+.menu-panel form { margin: 0; border-top: 1px solid var(--borde); margin-top: .3rem; padding-top: .3rem; }
+.menu-panel .salir { color: var(--rojo) !important; }
+.menu-cabecera { padding: .55rem .75rem .65rem; border-bottom: 1px solid var(--borde); margin-bottom: .3rem; display: flex; flex-direction: column; }
+.menu-cabecera small { color: var(--tenue); }
+
+/* --- Usuarios */
+.angosto { max-width: 520px; }
+.formulario.angosto .campo { margin-bottom: 1rem; }
+form.en-linea { display: inline; margin: 0; }
+.texto-rojo { color: var(--rojo); }
+tr.inactiva td { color: var(--tenue); }
+.etiqueta-tu { font-style: normal; font-size: .72rem; background: var(--primario-claro); color: var(--primario); border-radius: 99px; padding: .05rem .45rem; }
+.roles-insignias { display: flex; gap: .35rem; flex-wrap: wrap; }
+.rol-insignia { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .55rem .12rem .15rem; border-radius: 99px; background: var(--rol-claro); color: var(--rol); font-size: .8rem; font-weight: 600; }
+.rol-icono.mini { width: 1.35rem; height: 1.35rem; background: #fff; }
+.rol-icono.mini svg { width: .95rem; height: .95rem; }
+.rol-icono.chico { width: 2.4rem; height: 2.4rem; }
+.rol-icono.chico svg { width: 1.6rem; height: 1.6rem; }
+.cuenta-form .roles-campo, .cuenta-form .activo { grid-column: 1 / -1; }
+.roles-campo { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .4rem; }
+.roles-campo legend { font-weight: 600; font-size: .9rem; margin-bottom: .4rem; padding: 0; }
+.roles-campo > small { color: var(--tenue); font-size: .8rem; }
+.roles-tarjetas { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
+.rol-casilla { display: flex; align-items: center; gap: .6rem; padding: .6rem .7rem; border: 1px solid var(--borde); border-radius: 12px; cursor: pointer; font-weight: 600; background: var(--tarjeta); }
+.rol-casilla input { width: 1.05rem; height: 1.05rem; accent-color: var(--rol); }
+.rol-casilla:has(input:checked) { border-color: var(--rol); background: var(--rol-claro); }
+.rol-casilla .rol-icono { background: var(--rol-claro); color: var(--rol); }
+.rol-casilla:has(input:checked) .rol-icono { background: #fff; }
+.interruptor-campo { display: flex !important; flex-direction: row !important; gap: .5rem; align-items: center; font-weight: 600; }
+.generada code { background: var(--fondo); padding: .1rem .4rem; border-radius: 5px; font-size: .95rem; user-select: all; }
 
 /* --- Selección de rol */
 .manager { --rol: #1e5fa8; --rol-claro: #e6effa; }
@@ -52,6 +88,8 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 .rol-opcion:hover .rol-flecha { color: var(--rol); }
 .ayuda { color: var(--tenue); font-size: .88rem; margin: 1.6rem 0 .4rem; }
 .ayuda span { color: var(--primario); }
+.rol-opcion.sugerido { border-color: var(--rol); box-shadow: 0 0 0 3px var(--rol-claro); }
+.etiqueta { font-style: normal; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--rol); background: var(--rol-claro); border-radius: 99px; padding: .12rem .5rem; vertical-align: middle; margin-left: .3rem; }
 .usuario .enlace { color: #fff; opacity: .85; }
 .topbar .boton.primario { background: #fff; color: var(--primario); }
 
@@ -279,6 +317,10 @@ body.con-seleccion .contenedor { padding-bottom: 6rem; }
 .campos-dialogo label { display: flex; flex-direction: column; gap: .3rem; font-weight: 600; font-size: .88rem; }
 .campos-dialogo label.ancho { grid-column: 1 / -1; }
 .dialogo .acciones { justify-content: flex-end; }
+.opciones-fecha { border: 0; padding: 0; margin: 1rem 0 0; display: flex; flex-direction: column; gap: .55rem; }
+.opciones-fecha legend { font-weight: 600; font-size: .88rem; margin-bottom: .4rem; padding: 0; }
+.opciones-fecha label { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .92rem; }
+.opciones-fecha .fecha-inline { width: auto; padding: .25rem .5rem; }
 
 /* --- Detalle de factura */
 .volver { display: inline-block; margin-bottom: .6rem; text-decoration: none; font-size: .9rem; }
@@ -299,6 +341,12 @@ h3 .enlace { font-size: .85rem; font-weight: 400; margin-left: .5rem; }
   .ocultar-movil { display: none; }
   .busqueda kbd { display: none; }
   .acciones-encabezado .boton.primario { display: none; }
+  .solo-escritorio { display: none !important; }
+  .roles-tarjetas { grid-template-columns: 1fr; }
+  .topbar { gap: .5rem .9rem; }
+  .topbar nav { order: 3; flex-basis: 100%; overflow-x: auto; gap: 1rem; padding-bottom: .1rem; }
+  .topbar nav a { white-space: nowrap; }
+  .usuario { margin-left: auto; }
   .campos-dialogo { grid-template-columns: 1fr; }
   .cliente-celda { min-width: 160px; }
   .panel-filtros .ancho-cliente { grid-column: auto; }

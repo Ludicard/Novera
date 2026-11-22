@@ -196,7 +196,8 @@ class FactureroMovilTests(TestCase):
                          (Decimal("759.00"), Decimal("15"), Decimal("113.85"), Decimal("872.85")))
         self.assertEqual(a.email, "admin@central.test")
         self.assertEqual(a.direccion, "Av. Siempre Viva 123")
-        self.assertEqual(a.objeto, "Mes del Servicio: Diciembre")
+        self.assertEqual(a.objeto, "")  # el mes va al periodo, no se repite en el objeto
+        self.assertEqual(f["001-001-000000103"].objeto, "Ascensor: Numero 2")
         self.assertEqual(f["001-001-000000102"].periodo, date(2025, 2, 1))  # errata en la clave
         self.assertEqual(f["001-001-000000102"].dias_credito, 15)
         self.assertEqual(f["001-001-000000103"].abonado, Decimal("100.00"))

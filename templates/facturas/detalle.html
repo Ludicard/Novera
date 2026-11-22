@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load novera %}
 {% block title %}{{ factura.numero }}{% endblock %}
 {% block content %}
-<a class="volver" href="{{ volver }}">← Volver a facturas</a>
+<a class="volver" href="{{ volver }}">← Volver</a>
 <div class="encabezado">
   <div>
     <span class="tenue">{{ factura.get_tipo_display }}{% if factura.cliente %} · {{ factura.cliente }}{% endif %}</span>
@@ -29,7 +29,7 @@
   <section class="tarjeta">
     <dl class="datos">
       <dt>Cliente</dt><dd>{% if factura.cliente %}<a href="{{ factura.cliente.get_absolute_url }}">{{ factura.cliente }}</a>{% else %}—{% endif %}</dd>
-      <dt>Objeto</dt><dd>{{ factura.objeto|default:"—" }}</dd>
+      <dt>Objeto</dt><dd>{{ factura.objeto|objeto_corto|default:"—" }}</dd>
       <dt>Periodo</dt><dd>{{ factura.periodo|periodo }}</dd>
       <dt>Emisión</dt><dd>{{ factura.fecha_emision|date:"d/m/Y" }}</dd>
       <dt>Crédito</dt><dd>{{ factura.dias_credito }} días</dd>

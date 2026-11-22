@@ -55,9 +55,9 @@
 {% endif %}
 
 <div class="resumen-lista">
-  <div><span>Facturado</span><strong>{{ totales.suma_total|dinero }}</strong></div>
-  <div><span>Cobrado</span><strong class="verde">{{ totales.suma_pagado|dinero }}</strong></div>
-  <div><span>Saldo pendiente</span><strong>{{ totales.suma_saldo|dinero }}</strong></div>
+  <div><span>Facturado</span><strong>{{ totales.suma_total|default:0|dinero }}</strong></div>
+  <div><span>Cobrado</span><strong class="verde">{{ totales.suma_pagado|default:0|dinero }}</strong></div>
+  <div><span>Saldo pendiente</span><strong>{{ totales.suma_saldo|default:0|dinero }}</strong></div>
 </div>
 
 <div class="tarjeta sin-relleno desplazable">
@@ -69,7 +69,7 @@
       {% columna "cliente" "Cliente" %}
       {% columna "emision" "Emisión" "ocultar-movil" %}
       {% columna "vence" "Vence" %}
-      {% columna "total" "Total" "num" %}
+      {% columna "total" "Total" "num ocultar-movil" %}
       {% columna "saldo" "Saldo" "num" %}
       <th>Estado</th>
       <th class="acciones-col"><span class="sr">Acciones</span></th>
@@ -87,7 +87,7 @@
       </td>
       <td class="cliente-celda">
         {% if f.cliente %}<a href="{{ f.cliente.get_absolute_url }}">{{ f.cliente }}</a>{% else %}<span class="tenue">Sin cliente</span>{% endif %}
-        {% if f.objeto %}<small class="tenue bloque recorte" title="{{ f.objeto }}">{{ f.objeto }}</small>{% endif %}
+        {% with obj=f.objeto|objeto_corto %}{% if obj %}<small class="tenue bloque recorte" title="{{ obj }}">{{ obj }}</small>{% endif %}{% endwith %}
       </td>
       <td class="nowrap ocultar-movil">{{ f.fecha_emision|date:"d/m/Y" }}</td>
       <td class="nowrap">
@@ -99,7 +99,7 @@
           {% else %}<small class="bloque tenue">en {{ f.dias_para_cobro }} días</small>{% endif %}
         {% endif %}
       </td>
-      <td class="num">{{ f.total|dinero }}</td>
+      <td class="num ocultar-movil">{{ f.total|dinero }}</td>
       <td class="num">
         {% if f.anulada %}—{% else %}
           <strong>{{ f.saldo|dinero }}</strong>
@@ -143,8 +143,12 @@
 </div>
 
 <!-- Barra de selección múltiple -->
-<div class="barra-seleccion" id="barra-seleccion" hidden>
+<div class="barra-seleccion" id="barra-seleccion" hidden
+     data-filtradas="{{ por_cobrar_filtradas }}" data-saldo-filtradas="{{ totales.suma_saldo|default:0|floatformat:'2u' }}">
   <span><b id="sel-n">0</b> seleccionada(s) · saldo <b id="sel-saldo">$0.00</b></span>
+  {% if por_cobrar_filtradas > pagina.object_list|length %}
+  <button type="button" class="enlace" id="sel-filtradas" hidden>Seleccionar las {{ por_cobrar_filtradas }} por cobrar de todas las páginas</button>
+  {% endif %}
   <button type="button" class="boton" id="sel-exportar">⤓ Exportar</button>
   <button type="button" class="boton primario" id="sel-cobrar">Marcar como cobradas</button>
   <button type="button" class="enlace" id="sel-limpiar">Quitar selección</button>
@@ -179,10 +183,18 @@
     {% csrf_token %}
     <input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
     <input type="hidden" name="ids" id="lote-ids">
+    <input type="hidden" name="todas" id="lote-todas" value="">
+    <input type="hidden" name="filtros" value="{{ filtros }}">
     <h2>Marcar como cobradas</h2>
     <p class="tenue">Se registrará un pago por el <strong>saldo completo</strong> de <b id="lote-n"></b> factura(s): <b id="lote-total"></b>.</p>
+    <fieldset class="opciones-fecha">
+      <legend>Fecha de cada cobro</legend>
+      <label><input type="radio" name="fecha_modo" value="elegida" checked> Una misma fecha:
+        <input type="date" name="fecha" value="{{ hoy|date:'Y-m-d' }}" class="fecha-inline"></label>
+      <label><input type="radio" name="fecha_modo" value="vencimiento"> La fecha de vencimiento de cada factura <small class="tenue">(ideal para poner al día lo importado)</small></label>
+      <label><input type="radio" name="fecha_modo" value="emision"> La fecha de emisión de cada factura</label>
+    </fieldset>
     <div class="campos-dialogo">
-      <label>Fecha del cobro <input type="date" name="fecha" value="{{ hoy|date:'Y-m-d' }}" required></label>
       <label>Forma de pago
         <select name="forma">{% for v, t in formas_pago %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select>
       </label>

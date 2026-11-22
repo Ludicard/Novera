@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="encabezado">
+  <div>
+    <h1>Usuarios y accesos</h1>
+    <span class="tenue">Quién puede entrar a Novera y con qué roles</span>
+  </div>
+  <a class="boton primario" href="{% url 'usuarios:nueva' %}">+ Nueva cuenta</a>
+</div>
+
+<nav class="pestanas" aria-label="Estado de las cuentas">
+  <a class="pestana {% if estado == 'activas' %}activa{% endif %}" href="?estado=activas{% if q %}&q={{ q|urlencode }}{% endif %}"><span>Activas</span><b>{{ conteos.activas }}</b></a>
+  <a class="pestana {% if estado == 'desactivadas' %}activa{% endif %}" href="?estado=desactivadas{% if q %}&q={{ q|urlencode }}{% endif %}"><span>Desactivadas</span><b>{{ conteos.desactivadas }}</b></a>
+  <a class="pestana {% if estado == 'todas' %}activa{% endif %}" href="?estado=todas{% if q %}&q={{ q|urlencode }}{% endif %}"><span>Todas</span><b>{{ conteos.activas|add:conteos.desactivadas }}</b></a>
+</nav>
+
+<form method="get" class="tarjeta barra-busqueda">
+  <input type="hidden" name="estado" value="{{ estado }}">
+  <div class="busqueda"><span class="lupa" aria-hidden="true">⌕</span>
+    <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre, usuario o email…" autocomplete="off">
+  </div>
+  <button class="boton">Buscar</button>
+</form>
+
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista usuarios">
+  <thead><tr><th>Nombre</th><th>Usuario</th><th>Roles</th><th class="ocultar-movil">Último acceso</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for u in pagina %}
+    <tr class="{% if not u.is_active %}inactiva{% endif %}">
+      <td><strong>{{ u.get_full_name|default:"—" }}</strong>{% if u.email %}<small class="bloque tenue">{{ u.email }}</small>{% endif %}{% if u == user %} <em class="etiqueta-tu">tú</em>{% endif %}</td>
+      <td class="nowrap">{{ u.username }}</td>
+      <td>
+        <div class="roles-insignias">
+        {% for clave, nombre in u.roles_novera %}<span class="rol-insignia {{ clave }}"><span class="rol-icono mini">{% include "usuarios/_icono_rol.html" with clave=clave %}</span>{{ nombre }}</span>{% empty %}<span class="rojo">Sin rol</span>{% endfor %}
+        </div>
+        {% if u.is_superuser %}<small class="tenue bloque">Superusuario</small>{% endif %}
+      </td>
+      <td class="nowrap ocultar-movil">{{ u.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+      <td>{% if u.is_active %}<span class="estado pagada">Activa</span>{% else %}<span class="estado anulada">Desactivada</span>{% endif %}</td>
+      <td class="acciones-col nowrap">
+        {% if u.editable %}
+          <a class="boton chico" href="{% url 'usuarios:editar' u.pk %}">Editar</a>
+          {% if u != user %}
+          <form method="post" action="{% url 'usuarios:activar' u.pk %}" class="en-linea"
+                onsubmit="return confirm('{% if u.is_active %}¿Desactivar la cuenta de {{ u.username|escapejs }}? Ya no podrá iniciar sesión.{% else %}¿Reactivar la cuenta de {{ u.username|escapejs }}?{% endif %}')">
+            {% csrf_token %}<button class="boton chico {% if u.is_active %}texto-rojo{% endif %}">{% if u.is_active %}Desactivar{% else %}Activar{% endif %}</button>
+          </form>
+          {% endif %}
+        {% else %}<small class="tenue">Solo superusuario</small>{% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="vacio-tabla"><strong>No hay cuentas{% if q %} que coincidan con «{{ q }}»{% endif %}.</strong></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% include "_paginacion.html" %}
+{% endblock %}

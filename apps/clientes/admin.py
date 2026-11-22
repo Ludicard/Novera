@@ -13,7 +13,7 @@ class ClienteAdmin(admin.ModelAdmin):
 
     @admin.action(description="Fusionar clientes seleccionados (mismo cliente escrito distinto)")
     def fusionar(self, request, queryset):
-        """Conserva el que tiene RUC (o el más antiguo) y le pasa las facturas de los demás."""
+        """Conserva el que tiene RUC (o el más antiguo), le pasa las facturas de los demás y completa sus datos vacíos."""
         clientes = sorted(queryset, key=lambda c: (not c.identificacion, c.pk))
         if len(clientes) < 2:
             self.message_user(request, "Selecciona al menos dos clientes.", messages.WARNING)
@@ -22,8 +22,10 @@ class ClienteAdmin(admin.ModelAdmin):
         with transaction.atomic():
             for otro in otros:
                 otro.facturas.update(cliente=destino)
-                if not destino.notas and otro.notas:
-                    destino.notas = otro.notas
+                # Completa los datos vacíos del que se conserva con los de los demás
+                for campo in ("identificacion", "email", "telefono", "direccion", "notas"):
+                    if not getattr(destino, campo) and getattr(otro, campo):
+                        setattr(destino, campo, getattr(otro, campo))
                 otro.delete()
             destino.save()
         nombres = ", ".join(o.nombre for o in otros)

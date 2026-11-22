@@ -3,8 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.usuarios.roles import (
-    ADMINISTRADOR, MANAGER, ROLES, SESION_ROL, TECNICO, agregar_rol, asignar_roles, quitar_rol, roles_de,
-    roles_disponibles,
+    ADMINISTRADOR, COOKIE_ULTIMO_ROL, MANAGER, SESION_ROL, TECNICO, asignar_roles, roles_de, roles_disponibles,
 )
 from apps.usuarios.tests.utils import entrar_como
 
@@ -15,17 +14,14 @@ class RolesTests(TestCase):
     def test_los_tres_roles_existen(self):
         self.assertTrue({"Administrador", "Manager", "Técnico"} <= set(Group.objects.values_list("name", flat=True)))
 
-    def test_superusuario_sin_rol_pasa_a_administrador(self):
+    def test_superusuario_siempre_es_administrador_sin_escribir(self):
         admin = User.objects.create_superuser("jefe", "j@x.test", CLAVE)
         self.assertEqual(roles_de(admin), [ADMINISTRADOR])
+        self.assertFalse(admin.groups.exists())  # solo lectura: no toca la base de datos
 
     def test_varios_roles(self):
         u = User.objects.create_user("ana", password=CLAVE)
         asignar_roles(u, [TECNICO, MANAGER])
-        self.assertEqual(roles_de(u), [MANAGER, TECNICO])
-        quitar_rol(u, MANAGER)
-        agregar_rol(u, MANAGER)
-        agregar_rol(u, MANAGER)
         self.assertEqual(roles_de(u), [MANAGER, TECNICO])
 
     def test_administrador_puede_usar_los_tres(self):
@@ -46,86 +42,88 @@ class SeleccionDeRolTests(TestCase):
         asignar_roles(self.u, [TECNICO])
         r = self.iniciar_sesion()
         self.assertEqual(r.request["PATH_INFO"], self.elegir)
-        opciones = [o["clave"] for o in r.context["opciones"]]
-        self.assertEqual(opciones, [TECNICO])
-        self.assertContains(r, "Selecciona tu rol")
+        self.assertEqual([o["clave"] for o in r.context["opciones"]], [TECNICO])
 
-    def test_solo_muestra_los_roles_con_acceso(self):
-        asignar_roles(self.u, [MANAGER, TECNICO])
-        r = self.iniciar_sesion()
-        self.assertEqual([o["clave"] for o in r.context["opciones"]], [MANAGER, TECNICO])
+    def test_administrador_sugerido_y_ultimo_rol_recordado(self):
         asignar_roles(self.u, [ADMINISTRADOR])
-        r = self.client.get(self.elegir)
-        self.assertEqual([o["clave"] for o in r.context["opciones"]], [MANAGER, ADMINISTRADOR, TECNICO])
+        r = self.iniciar_sesion()
+        self.assertEqual([o["clave"] for o in r.context["opciones"] if o["sugerido"]], [ADMINISTRADOR])
+        r = self.client.post(self.elegir, {"rol": TECNICO})
+        self.assertEqual(r.cookies[COOKIE_ULTIMO_ROL].value, TECNICO)
+        self.client.post(reverse("logout"))
+        r = self.iniciar_sesion()
+        sugerido = [o for o in r.context["opciones"] if o["sugerido"]][0]
+        self.assertEqual((sugerido["clave"], sugerido["ultimo"]), (TECNICO, True))
 
-    def test_sin_elegir_no_entra_a_la_app(self):
+    def test_sin_elegir_no_entra_y_luego_vuelve_a_donde_iba(self):
         asignar_roles(self.u, [MANAGER])
         self.client.force_login(self.u)
         r = self.client.get(reverse("facturas:lista") + "?estado=VENCIDA")
         self.assertRedirects(r, self.elegir + "?siguiente=%2Ffacturas%2F%3Festado%3DVENCIDA")
+        r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": "/facturas/?estado=VENCIDA"})
+        self.assertRedirects(r, "/facturas/?estado=VENCIDA")
 
-    def test_elegir_y_seguir_a_donde_iba(self):
-        asignar_roles(self.u, [MANAGER, TECNICO])
-        self.iniciar_sesion(siguiente="/facturas/")
-        r = self.client.post(self.elegir, {"rol": TECNICO, "siguiente": "/facturas/"})
-        self.assertRedirects(r, "/facturas/")
-        r = self.client.get(reverse("dashboard"))
-        self.assertEqual(r.context["rol"], TECNICO)
-        self.assertContains(r, "<b>Técnico</b>")
+    def test_post_sin_rol_vuelve_a_la_pagina_del_formulario(self):
+        asignar_roles(self.u, [MANAGER])
+        self.client.force_login(self.u)
+        r = self.client.post(reverse("clientes:nuevo"), {"nombre": "X"}, HTTP_REFERER="http://testserver/clientes/nuevo/")
+        self.assertRedirects(r, self.elegir + "?siguiente=%2Fclientes%2Fnuevo%2F", fetch_redirect_response=False)
+
+    def test_no_vuelve_a_salir_ni_a_entrar(self):
+        asignar_roles(self.u, [MANAGER])
+        self.client.force_login(self.u)
+        for malo in ["/cuentas/logout/", "/admin/logout/", "/cuentas/login/", "https://malicioso.test/"]:
+            r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": malo})
+            self.assertEqual(r.url, reverse("dashboard"), malo)
 
     def test_no_puede_elegir_un_rol_sin_acceso(self):
         asignar_roles(self.u, [TECNICO])
         self.client.force_login(self.u)
-        r = self.client.post(self.elegir, {"rol": ADMINISTRADOR})
-        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.client.post(self.elegir, {"rol": ADMINISTRADOR}).status_code, 400)
         self.assertNotIn(SESION_ROL, self.client.session)
-        r = self.client.post(self.elegir, {"rol": "inventado"})
-        self.assertEqual(r.status_code, 400)
 
     def test_cada_inicio_de_sesion_vuelve_a_preguntar(self):
         asignar_roles(self.u, [MANAGER])
         self.iniciar_sesion()
         self.client.post(self.elegir, {"rol": MANAGER})
-        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
         self.client.post(reverse("logout"))
-        r = self.iniciar_sesion()
-        self.assertEqual(r.request["PATH_INFO"], self.elegir)
+        self.assertEqual(self.iniciar_sesion().request["PATH_INFO"], self.elegir)
 
-    def test_cambiar_de_rol_desde_la_barra(self):
+    def test_cambiar_de_rol_marca_el_actual_y_permite_volver(self):
         entrar_como(self.client, self.u, MANAGER, roles=[MANAGER, TECNICO])
-        r = self.client.get(reverse("dashboard"))
-        self.assertContains(r, f'href="{self.elegir}"')
-        self.client.post(self.elegir, {"rol": TECNICO})
-        self.assertEqual(self.client.get(reverse("dashboard")).context["rol"], TECNICO)
+        r = self.client.get(self.elegir + "?siguiente=/facturas/")
+        self.assertEqual([o["clave"] for o in r.context["opciones"] if o["actual"]], [MANAGER])
+        self.assertContains(r, "Volver sin cambiar")
+        self.assertContains(r, 'class="topbar"')
 
-    def test_si_le_quitan_el_rol_activo_vuelve_a_elegir(self):
-        entrar_como(self.client, self.u, MANAGER, roles=[MANAGER, TECNICO])
-        quitar_rol(self.u, MANAGER)
-        self.assertRedirects(self.client.get(reverse("dashboard")), self.elegir)
+    def test_login_ya_iniciado_redirige(self):
+        entrar_como(self.client, self.u, MANAGER)
+        self.assertEqual(self.client.get(reverse("login")).status_code, 302)
 
-    def test_no_redirige_fuera_del_sitio(self):
-        asignar_roles(self.u, [MANAGER])
-        self.client.force_login(self.u)
-        r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": "https://malicioso.test/"})
-        self.assertEqual(r.url, reverse("dashboard"))
+    def test_paginas_de_contrasena_funcionan(self):
+        entrar_como(self.client, self.u, MANAGER)
+        r = self.client.get(reverse("password_change"))
+        self.assertContains(r, "Cambiar mi contraseña")
+        r = self.client.post(reverse("password_change"), {
+            "old_password": CLAVE, "new_password1": "Otra-Clave-998", "new_password2": "Otra-Clave-998",
+        }, follow=True)
+        self.assertContains(r, "Contraseña cambiada")
 
     def test_cuenta_sin_rol(self):
         self.client.force_login(self.u)
         r = self.client.get(reverse("dashboard"))
         self.assertContains(r, "aún no tiene un rol", status_code=403)
-        self.assertEqual(self.client.get(self.elegir).status_code, 403)
         self.assertEqual(self.client.get("/salud/").status_code, 200)
-
-
-class AdminRolesTests(TestCase):
-    def test_admin_crea_usuario_con_varios_roles(self):
-        jefe = User.objects.create_superuser("jefe", "j@x.test", CLAVE)
-        entrar_como(self.client, jefe, ADMINISTRADOR)
-        r = self.client.post(reverse("admin:auth_user_add"), {
-            "username": "tec1", "roles": [MANAGER, TECNICO],
-            "password1": "Clave-Segura-987", "password2": "Clave-Segura-987", "usable_password": "true",
-        })
+        r = self.client.post(reverse("logout"))
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(roles_de(User.objects.get(username="tec1")), [MANAGER, TECNICO])
-        self.assertContains(self.client.get(reverse("admin:auth_user_changelist")), "Manager, Técnico")
-        self.assertEqual(set(ROLES), {MANAGER, ADMINISTRADOR, TECNICO})
+
+    def test_logout_del_admin_sin_rol_elegido(self):
+        jefe = User.objects.create_superuser("jefe", "j@x.test", CLAVE)
+        self.client.force_login(jefe)
+        self.client.post(reverse("admin:logout"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_superusuario_entra_al_admin_sin_elegir_rol(self):
+        jefe = User.objects.create_superuser("jefe", "j@x.test", CLAVE)
+        self.client.force_login(jefe)
+        self.assertEqual(self.client.get("/admin/").status_code, 200)

@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.views import LoginView
 from django.db import connection
 from django.http import HttpResponse
 from django.urls import include, path
@@ -21,6 +22,7 @@ urlpatterns = [
     path("", dashboard, name="dashboard"),
     path("facturas/", include("apps.facturas.urls")),
     path("clientes/", include("apps.clientes.urls")),
+    path("cuentas/login/", LoginView.as_view(redirect_authenticated_user=True), name="login"),
     path("cuentas/", include("django.contrib.auth.urls")),
     path("usuarios/", include("apps.usuarios.urls")),
     path("admin/", admin.site.urls),

@@ -53,7 +53,7 @@
   <div class="kpi neutro">
     <span>Días promedio de cobro</span>
     <strong>{% if kpis.dias_cobro is not None %}{{ kpis.dias_cobro }} día{{ kpis.dias_cobro|pluralize }}{% else %}—{% endif %}</strong>
-    <small>{% if kpis.dias_cobro is not None %}de la emisión al pago{% else %}aún no hay pagos registrados{% endif %}</small>
+    <small>{% if kpis.dias_cobro is not None %}de la emisión al pago{% else %}sin pagos registrados en Novera (los importados no cuentan){% endif %}</small>
   </div>
 </section>
 

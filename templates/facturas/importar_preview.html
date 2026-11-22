@@ -6,7 +6,7 @@
   <form method="post" class="acciones">
     {% csrf_token %}
     <button class="boton" name="accion" value="cancelar">Cancelar</button>
-    <button class="boton primario" name="accion" value="confirmar" {% if not resumen.filas %}disabled{% endif %}>Importar {{ resumen.filas }} documentos</button>
+    <button class="boton primario" name="accion" value="confirmar" {% if not resumen.filas %}disabled{% endif %}>Importar {{ resumen.filas }} documento{{ resumen.filas|pluralize }}</button>
   </form>
 </div>
 

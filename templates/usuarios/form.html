@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'usuarios:lista' %}">← Volver a usuarios</a>
+<div class="encabezado">
+  <div>
+    <h1>{{ titulo }}</h1>
+    {% if cuenta %}<span class="tenue">Usuario: {{ cuenta.username }}{% if cuenta.last_login %} · último acceso {{ cuenta.last_login|date:"d/m/Y H:i" }}{% endif %}</span>{% endif %}
+  </div>
+</div>
+
+<div class="rejilla panel">
+  <form method="post" class="tarjeta formulario cuenta-form" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="datos">
+    <h2>{% if cuenta %}Datos y accesos{% else %}Datos de la cuenta{% endif %}</h2>
+    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+    <div class="campos">
+      {% for campo in form.visible_fields %}
+        {% if campo.name == "roles" %}{% include "usuarios/_roles_campo.html" %}
+        {% elif campo.name == "activo" %}
+        <div class="campo activo"><label class="interruptor-campo">{{ campo }} {{ campo.label }}</label><small>{{ campo.help_text }}</small></div>
+        {% else %}
+        <div class="campo {{ campo.name }}{% if campo.errors %} con-error{% endif %}">
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} *{% endif %}</label>
+          {{ campo }}
+          {% if campo.help_text %}<small>{{ campo.help_text }}</small>{% endif %}
+          {% for e in campo.errors %}<small class="error">{{ e }}</small>{% endfor %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% if cuenta.is_superuser %}<p class="tenue">Es superusuario: siempre conserva el acceso de Administrador.</p>{% endif %}
+    <div class="acciones">
+      <button class="boton primario">{% if cuenta %}Guardar cambios{% else %}Crear cuenta{% endif %}</button>
+      <a href="{% url 'usuarios:lista' %}">Cancelar</a>
+    </div>
+  </form>
+
+  {% if cuenta %}
+  <form method="post" class="tarjeta formulario" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="password">
+    <h2>{% if es_yo %}Cambiar mi contraseña{% else %}Restablecer contraseña{% endif %}</h2>
+    <p class="tenue">{% if es_yo %}Seguirás con la sesión abierta.{% else %}Escribe una nueva contraseña y compártela con {{ cuenta.get_short_name|default:cuenta.username }} de forma segura.{% endif %}</p>
+    {% with form=form_pw %}{% include "_campos.html" %}{% endwith %}
+    <div class="acciones">
+      <button class="boton">Cambiar contraseña</button>
+      <button type="button" class="enlace" id="generar">Generar una segura</button>
+    </div>
+    <p class="tenue generada" id="generada" hidden></p>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  // Al marcar Administrador se marcan también Manager y Técnico (ya los incluye)
+  var casillas = document.querySelectorAll(".roles-campo input[type=checkbox]");
+  casillas.forEach(function (c) {
+    c.addEventListener("change", function () {
+      if (c.value === "administrador" && c.checked) casillas.forEach(function (o) { o.checked = true; });
+    });
+  });
+  var generar = document.getElementById("generar");
+  if (!generar) return;
+  generar.addEventListener("click", function () {
+    var letras = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    var bytes = new Uint32Array(12); crypto.getRandomValues(bytes);
+    var clave = Array.prototype.map.call(bytes, function (b) { return letras[b % letras.length]; }).join("");
+    var form = generar.closest("form");
+    form.querySelector("[name=password1]").value = clave;
+    form.querySelector("[name=password2]").value = clave;
+    var aviso = document.getElementById("generada");
+    aviso.hidden = false;
+    aviso.innerHTML = "Contraseña generada: <code></code> — cópiala antes de guardar.";
+    aviso.querySelector("code").textContent = clave;
+  });
+})();
+</script>
+{% endblock %}

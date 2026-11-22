@@ -77,11 +77,17 @@
   var barra = document.getElementById("barra-seleccion");
   if (!todas || !barra) return;
 
+  var botonFiltradas = document.getElementById("sel-filtradas");
+  var todasFiltradas = false; // modo «todas las facturas por cobrar que cumplen los filtros»
   function seleccionadas() { return casillas.filter(function (c) { return c.checked; }); }
   function actualizar() {
     var sel = seleccionadas();
+    if (sel.length < casillas.length) todasFiltradas = false;
     var saldo = sel.reduce(function (s, c) { return s + (+c.dataset.saldo || 0); }, 0);
-    document.getElementById("sel-n").textContent = sel.length;
+    var n = sel.length;
+    if (todasFiltradas) { n = +barra.dataset.filtradas; saldo = +barra.dataset.saldoFiltradas; }
+    if (botonFiltradas) botonFiltradas.hidden = todasFiltradas || sel.length !== casillas.length;
+    document.getElementById("sel-n").textContent = todasFiltradas ? n + " (todas las filtradas)" : n;
     document.getElementById("sel-saldo").textContent = dinero.format(saldo);
     document.getElementById("sel-cobrar").disabled = saldo <= 0;
     barra.hidden = sel.length === 0;
@@ -106,19 +112,25 @@
       actualizar();
     });
   });
+  if (botonFiltradas) botonFiltradas.addEventListener("click", function () { todasFiltradas = true; actualizar(); });
   document.getElementById("sel-limpiar").addEventListener("click", function () {
+    todasFiltradas = false;
     casillas.forEach(function (c) { c.checked = false; });
     actualizar();
   });
   document.getElementById("sel-exportar").addEventListener("click", function () {
+    if (todasFiltradas) { window.location = script.dataset.exportar + window.location.search; return; }
     var ids = seleccionadas().map(function (c) { return c.value; }).join(",");
     window.location = script.dataset.exportar + "?ids=" + ids;
   });
   document.getElementById("sel-cobrar").addEventListener("click", function () {
     var sel = seleccionadas().filter(function (c) { return +c.dataset.saldo > 0; });
     var total = sel.reduce(function (s, c) { return s + (+c.dataset.saldo); }, 0);
-    document.getElementById("lote-ids").value = sel.map(function (c) { return c.value; }).join(",");
-    document.getElementById("lote-n").textContent = sel.length;
+    var n = sel.length;
+    if (todasFiltradas) { n = +barra.dataset.filtradas; total = +barra.dataset.saldoFiltradas; }
+    document.getElementById("lote-todas").value = todasFiltradas ? "1" : "";
+    document.getElementById("lote-ids").value = todasFiltradas ? "" : sel.map(function (c) { return c.value; }).join(",");
+    document.getElementById("lote-n").textContent = n;
     document.getElementById("lote-total").textContent = dinero.format(total);
     abrir(document.getElementById("dlg-lote"));
   });

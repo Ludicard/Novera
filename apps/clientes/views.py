@@ -2,11 +2,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from apps.facturas.models import Factura
 
-from .forms import ClienteForm
+from .forms import ClienteForm, ClienteRapidoForm
 from .models import Cliente
 
 
@@ -43,7 +46,11 @@ def nuevo(request):
     if form.is_valid():
         cliente = form.save()
         messages.success(request, f"Cliente «{cliente}» creado.")
-        return redirect(request.GET.get("next") or cliente.get_absolute_url())
+        siguiente = request.GET.get("next", "")
+        if siguiente and url_has_allowed_host_and_scheme(siguiente, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            separador = "&" if "?" in siguiente else "?"
+            return redirect(f"{siguiente}{separador}cliente={cliente.pk}")
+        return redirect(cliente)
     return render(request, "clientes/form.html", {"form": form, "titulo": "Nuevo cliente"})
 
 
@@ -56,3 +63,14 @@ def editar(request, pk):
         messages.success(request, "Cliente actualizado.")
         return redirect(cliente)
     return render(request, "clientes/form.html", {"form": form, "titulo": f"Editar {cliente}", "cliente": cliente})
+
+
+@login_required
+@require_POST
+def rapido(request):
+    """Alta rápida desde el formulario de factura (diálogo): responde JSON."""
+    form = ClienteRapidoForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"errores": {k: [str(e) for e in v] for k, v in form.errors.items()}}, status=400)
+    cliente = form.save()
+    return JsonResponse({"id": cliente.pk, "nombre": cliente.nombre, "dias_credito": cliente.dias_credito})
