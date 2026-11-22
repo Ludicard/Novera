@@ -44,8 +44,12 @@ class CuentaForm(forms.ModelForm):
         if self.nueva:
             self.fields.pop("activo")
         else:
-            self.fields.pop("password1")
-            self.fields.pop("password2")
+            # Cambiar la contraseña es opcional al editar: vacía = se mantiene la actual
+            for campo in ("password1", "password2"):
+                self.fields[campo].required = False
+            self.fields["password1"].label = "Nueva contraseña"
+            self.fields["password1"].help_text = "Déjala vacía para mantener la actual."
+            self.fields["password2"].label = "Repetir nueva contraseña"
             self.fields["roles"].initial = roles_de(self.instance)
             self.fields["activo"].initial = self.instance.is_active
             if self.instance == actor:
@@ -63,15 +67,17 @@ class CuentaForm(forms.ModelForm):
         datos = super().clean()
         roles = datos.get("roles") or []
         activo = datos.get("activo", True) if not self.nueva else True
-        if self.nueva:
-            p1, p2 = datos.get("password1"), datos.get("password2")
-            if p1 and p2 and p1 != p2:
+        p1, p2 = datos.get("password1") or "", datos.get("password2") or ""
+        if p1 or p2:
+            if p1 != p2:
                 self.add_error("password2", "Las contraseñas no coinciden.")
-            elif p1:
+            else:
+                usuario = self.instance if not self.nueva else Usuario(username=datos.get("username", ""))
                 try:
-                    password_validation.validate_password(p1, Usuario(username=datos.get("username", "")))
+                    password_validation.validate_password(p1, usuario)
                 except forms.ValidationError as e:
                     self.add_error("password1", e)
+        if self.nueva:
             return datos
 
         u = self.instance
@@ -81,25 +87,4 @@ class CuentaForm(forms.ModelForm):
         sigue_admin = activo and (ADMINISTRADOR in roles or u.is_superuser)
         if era_admin and not sigue_admin and not administradores_activos(excluir=u).exists():
             self.add_error(None, "Debe quedar al menos un Administrador activo.")
-        return datos
-
-
-class NuevaPasswordForm(forms.Form):
-    password1 = forms.CharField(label="Nueva contraseña", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
-    password2 = forms.CharField(label="Repetir", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
-
-    def __init__(self, *args, usuario, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.usuario = usuario
-
-    def clean(self):
-        datos = super().clean()
-        p1, p2 = datos.get("password1"), datos.get("password2")
-        if p1 and p2 and p1 != p2:
-            self.add_error("password2", "Las contraseñas no coinciden.")
-        elif p1:
-            try:
-                password_validation.validate_password(p1, self.usuario)
-            except forms.ValidationError as e:
-                self.add_error("password1", e)
         return datos

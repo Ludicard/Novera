@@ -41,6 +41,9 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 
 /* --- Usuarios */
 .angosto { max-width: 520px; }
+.angosto-ancho { max-width: 760px; }
+.cuenta-form h2.seccion { margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--borde); }
+.cuenta-form h2 small { font-weight: 400; font-size: .85rem; }
 .formulario.angosto .campo { margin-bottom: 1rem; }
 form.en-linea { display: inline; margin: 0; }
 .texto-rojo { color: var(--rojo); }

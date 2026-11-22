@@ -11,7 +11,7 @@ from django.urls import Resolver404, resolve
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .forms import CuentaForm, NuevaPasswordForm
+from .forms import CuentaForm
 from .roles import (
     ADMINISTRADOR, COOKIE_ULTIMO_ROL, DESCRIPCIONES, ROLES, SESION_ROL, administradores_activos, asignar_roles,
     roles_de,
@@ -146,27 +146,24 @@ def usuario_editar(request, pk):
     if not _puede_editar(request.user, usuario):
         messages.error(request, "Esta cuenta es de un superusuario: solo otro superusuario puede modificarla.")
         return redirect("usuarios:lista")
-    accion = request.POST.get("accion")
-    form = CuentaForm(request.POST if accion == "datos" else None, instance=usuario, actor=request.user)
-    form_pw = NuevaPasswordForm(request.POST if accion == "password" else None, usuario=usuario)
-
-    if accion == "datos" and form.is_valid():
+    form = CuentaForm(request.POST or None, instance=usuario, actor=request.user)
+    if form.is_valid():
         u = form.save(commit=False)
         if "activo" in form.cleaned_data and usuario != request.user:
             u.is_active = form.cleaned_data["activo"]
+        nueva = form.cleaned_data.get("password1")
+        if nueva:
+            u.set_password(nueva)
         u.save()
         asignar_roles(u, form.cleaned_data["roles"])
-        messages.success(request, f"Cuenta «{u.username}» actualizada.")
+        if nueva and u == request.user:
+            update_session_auth_hash(request, u)  # no cerrar mi propia sesión
+        texto = f"Cuenta «{u.username}» actualizada"
+        texto += " y contraseña cambiada. Compártela de forma segura." if nueva else "."
+        messages.success(request, texto)
         return redirect("usuarios:lista")
-    if accion == "password" and form_pw.is_valid():
-        usuario.set_password(form_pw.cleaned_data["password1"])
-        usuario.save(update_fields=["password"])
-        if usuario == request.user:
-            update_session_auth_hash(request, usuario)
-        messages.success(request, f"Contraseña de «{usuario.username}» cambiada. Compártela de forma segura.")
-        return redirect("usuarios:editar", pk=usuario.pk)
     return render(request, "usuarios/form.html", {
-        "form": form, "form_pw": form_pw, "cuenta": usuario, "titulo": f"Editar {usuario.get_full_name() or usuario.username}",
+        "form": form, "cuenta": usuario, "titulo": f"Editar {usuario.get_full_name() or usuario.username}",
         "es_yo": usuario == request.user,
     })
 

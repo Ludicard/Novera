@@ -84,15 +84,41 @@ class GestionUsuariosTests(TestCase):
         su.refresh_from_db()
         self.assertTrue(su.is_active)
 
-    def test_restablecer_contrasena(self):
-        otro = User.objects.create_user("tec", password=CLAVE)
+    def test_cambiar_contrasena_desde_el_mismo_formulario_y_entrar(self):
+        otro = User.objects.create_user("tec", password=CLAVE, first_name="Tec")
         asignar_roles(otro, [TECNICO])
-        r = self.client.post(reverse("usuarios:editar", args=[otro.pk]), {
-            "accion": "password", "password1": "Nueva-Clave-555", "password2": "Nueva-Clave-555",
-        })
-        self.assertRedirects(r, reverse("usuarios:editar", args=[otro.pk]))
+        r = self.client.post(reverse("usuarios:editar", args=[otro.pk]),
+                             self.datos(otro, password1="Nueva-Clave-555", password2="Nueva-Clave-555"), follow=True)
+        self.assertContains(r, "contraseña cambiada")
         otro.refresh_from_db()
         self.assertTrue(otro.check_password("Nueva-Clave-555"))
+        # La persona puede entrar con la nueva contraseña
+        c = self.client_class()
+        r = c.post(reverse("login"), {"username": "tec", "password": "Nueva-Clave-555"})
+        self.assertEqual(r.status_code, 302)
+
+    def test_contrasena_vacia_mantiene_la_actual(self):
+        otro = User.objects.create_user("tec", password=CLAVE, first_name="Tec")
+        asignar_roles(otro, [TECNICO])
+        self.client.post(reverse("usuarios:editar", args=[otro.pk]), self.datos(otro, username="tec2"))
+        otro.refresh_from_db()
+        self.assertEqual(otro.username, "tec2")
+        self.assertTrue(otro.check_password(CLAVE))
+
+    def test_contrasenas_que_no_coinciden_no_guardan_nada(self):
+        otro = User.objects.create_user("tec", password=CLAVE, first_name="Tec")
+        asignar_roles(otro, [TECNICO])
+        r = self.client.post(reverse("usuarios:editar", args=[otro.pk]),
+                             self.datos(otro, username="tec2", password1="Nueva-Clave-555", password2="otra"))
+        self.assertContains(r, "no coinciden")
+        otro.refresh_from_db()
+        self.assertEqual(otro.username, "tec")
+
+    def test_cambiar_mi_propia_contrasena_no_cierra_mi_sesion(self):
+        r = self.client.post(reverse("usuarios:editar", args=[self.admin.pk]),
+                             self.datos(self.admin, roles=[ADMINISTRADOR], password1="Nueva-Clave-555", password2="Nueva-Clave-555"))
+        self.assertRedirects(r, reverse("usuarios:lista"))
+        self.assertEqual(self.client.get(reverse("usuarios:lista")).status_code, 200)
 
     def test_solo_el_rol_administrador_gestiona_usuarios(self):
         tec = User.objects.create_user("tec", password=CLAVE)
@@ -150,3 +176,37 @@ class ManagerTecnicoSinAdminTests(TestCase):
         nuevo = User.objects.get(username="p3")
         self.assertEqual(roles_de(nuevo), [MANAGER, TECNICO])
         self.assertFalse(nuevo.is_staff or nuevo.is_superuser)
+
+
+class InicioDeSesionTests(TestCase):
+    def setUp(self):
+        self.u = User.objects.create_user("prueba22", password="Clave-Segura-987")
+        asignar_roles(self.u, [TECNICO])
+
+    def entrar(self, usuario, clave="Clave-Segura-987"):
+        return self.client.post(reverse("login"), {"username": usuario, "password": clave})
+
+    def test_usuario_sin_distinguir_mayusculas_ni_espacios(self):
+        for variante in ["prueba22", "Prueba22", "PRUEBA22", " prueba22 "]:
+            self.client.logout()
+            self.assertEqual(self.entrar(variante).status_code, 302, variante)
+
+    def test_contrasena_si_distingue_mayusculas(self):
+        r = self.entrar("prueba22", "clave-segura-987")
+        self.assertContains(r, "distingue mayúsculas y minúsculas")
+
+    def test_cuenta_desactivada_no_entra(self):
+        self.u.is_active = False
+        self.u.save()
+        self.assertEqual(self.entrar("prueba22").status_code, 200)
+
+    def test_alta_desde_novera_y_primer_inicio_de_sesion(self):
+        admin = User.objects.create_user("jefa", password=CLAVE, first_name="Jefa")
+        entrar_como(self.client, admin, ADMINISTRADOR)
+        self.client.post(reverse("usuarios:nueva"), {
+            "first_name": "Ana", "username": "Ana.Ruiz", "roles": [MANAGER],
+            "password1": "Clave-Nueva-321", "password2": "Clave-Nueva-321",
+        })
+        self.client.post(reverse("logout"))
+        r = self.client.post(reverse("login"), {"username": "ana.ruiz", "password": "Clave-Nueva-321"}, follow=True)
+        self.assertEqual(r.request["PATH_INFO"], reverse("usuarios:elegir_rol"))

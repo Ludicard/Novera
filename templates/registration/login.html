@@ -6,7 +6,7 @@
   <p class="tenue">Gestión de facturas por cobrar</p>
   <form method="post" class="tarjeta">
     {% csrf_token %}
-    {% if form.errors %}<div class="mensaje error">Usuario o contraseña incorrectos.</div>{% endif %}
+    {% if form.errors %}<div class="mensaje error">Usuario o contraseña incorrectos. Revisa la contraseña: distingue mayúsculas y minúsculas. Si no la recuerdas, pide a un Administrador que te asigne una nueva.</div>{% endif %}
     <label>Usuario {{ form.username }}</label>
     <label>Contraseña {{ form.password }}</label>
     <input type="hidden" name="next" value="{{ next }}">

@@ -5,53 +5,47 @@
 <div class="encabezado">
   <div>
     <h1>{{ titulo }}</h1>
-    {% if cuenta %}<span class="tenue">Usuario: {{ cuenta.username }}{% if cuenta.last_login %} · último acceso {{ cuenta.last_login|date:"d/m/Y H:i" }}{% endif %}</span>{% endif %}
+    {% if cuenta %}<span class="tenue">Inicia sesión como <strong>{{ cuenta.username }}</strong>{% if cuenta.last_login %} · último acceso {{ cuenta.last_login|date:"d/m/Y H:i" }}{% else %} · aún no ha entrado{% endif %}</span>{% endif %}
   </div>
 </div>
 
-<div class="rejilla panel">
-  <form method="post" class="tarjeta formulario cuenta-form" autocomplete="off">
-    {% csrf_token %}
-    <input type="hidden" name="accion" value="datos">
-    <h2>{% if cuenta %}Datos y accesos{% else %}Datos de la cuenta{% endif %}</h2>
-    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
-    <div class="campos">
-      {% for campo in form.visible_fields %}
-        {% if campo.name == "roles" %}{% include "usuarios/_roles_campo.html" %}
-        {% elif campo.name == "activo" %}
-        <div class="campo activo"><label class="interruptor-campo">{{ campo }} {{ campo.label }}</label><small>{{ campo.help_text }}</small></div>
-        {% else %}
-        <div class="campo {{ campo.name }}{% if campo.errors %} con-error{% endif %}">
-          <label for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} *{% endif %}</label>
-          {{ campo }}
-          {% if campo.help_text %}<small>{{ campo.help_text }}</small>{% endif %}
-          {% for e in campo.errors %}<small class="error">{{ e }}</small>{% endfor %}
-        </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-    {% if cuenta.is_superuser %}<p class="tenue">Es superusuario: siempre conserva el acceso de Administrador.</p>{% endif %}
-    <div class="acciones">
-      <button class="boton primario">{% if cuenta %}Guardar cambios{% else %}Crear cuenta{% endif %}</button>
-      <a href="{% url 'usuarios:lista' %}">Cancelar</a>
-    </div>
-  </form>
+<form method="post" class="tarjeta formulario cuenta-form angosto-ancho" autocomplete="off">
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
 
-  {% if cuenta %}
-  <form method="post" class="tarjeta formulario" autocomplete="off">
-    {% csrf_token %}
-    <input type="hidden" name="accion" value="password">
-    <h2>{% if es_yo %}Cambiar mi contraseña{% else %}Restablecer contraseña{% endif %}</h2>
-    <p class="tenue">{% if es_yo %}Seguirás con la sesión abierta.{% else %}Escribe una nueva contraseña y compártela con {{ cuenta.get_short_name|default:cuenta.username }} de forma segura.{% endif %}</p>
-    {% with form=form_pw %}{% include "_campos.html" %}{% endwith %}
-    <div class="acciones">
-      <button class="boton">Cambiar contraseña</button>
-      <button type="button" class="enlace" id="generar">Generar una segura</button>
-    </div>
-    <p class="tenue generada" id="generada" hidden></p>
-  </form>
-  {% endif %}
-</div>
+  <h2>Datos</h2>
+  <div class="campos">
+    {% include "usuarios/_campo.html" with campo=form.first_name %}
+    {% include "usuarios/_campo.html" with campo=form.last_name %}
+    {% include "usuarios/_campo.html" with campo=form.username %}
+    {% include "usuarios/_campo.html" with campo=form.email %}
+  </div>
+
+  <h2 class="seccion">Accesos</h2>
+  <div class="campos">
+    {% include "usuarios/_roles_campo.html" with campo=form.roles %}
+    {% if form.activo %}
+    <div class="campo activo"><label class="interruptor-campo">{{ form.activo }} {{ form.activo.label }}</label><small>{{ form.activo.help_text }}</small></div>
+    {% endif %}
+  </div>
+
+  <h2 class="seccion">{% if cuenta %}{% if es_yo %}Cambiar mi contraseña{% else %}Cambiar contraseña{% endif %} <small class="tenue">(opcional)</small>{% else %}Contraseña{% endif %}</h2>
+  <div class="campos">
+    {% include "usuarios/_campo.html" with campo=form.password1 %}
+    {% include "usuarios/_campo.html" with campo=form.password2 %}
+  </div>
+  <p class="tenue">
+    <button type="button" class="enlace" id="generar">Generar una contraseña segura</button>
+    · Distingue mayúsculas y minúsculas. Compártela con la persona de forma segura.
+  </p>
+  <p class="generada mensaje" id="generada" hidden></p>
+
+  {% if cuenta.is_superuser %}<p class="tenue">Es superusuario: siempre conserva el acceso de Administrador.</p>{% endif %}
+  <div class="acciones">
+    <button class="boton primario">{% if cuenta %}Guardar cambios{% else %}Crear cuenta{% endif %}</button>
+    <a href="{% url 'usuarios:lista' %}">Cancelar</a>
+  </div>
+</form>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -63,18 +57,16 @@
       if (c.value === "administrador" && c.checked) casillas.forEach(function (o) { o.checked = true; });
     });
   });
-  var generar = document.getElementById("generar");
-  if (!generar) return;
-  generar.addEventListener("click", function () {
+  document.getElementById("generar").addEventListener("click", function () {
     var letras = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     var bytes = new Uint32Array(12); crypto.getRandomValues(bytes);
     var clave = Array.prototype.map.call(bytes, function (b) { return letras[b % letras.length]; }).join("");
-    var form = generar.closest("form");
+    var form = this.closest("form");
     form.querySelector("[name=password1]").value = clave;
     form.querySelector("[name=password2]").value = clave;
     var aviso = document.getElementById("generada");
     aviso.hidden = false;
-    aviso.innerHTML = "Contraseña generada: <code></code> — cópiala antes de guardar.";
+    aviso.innerHTML = "Contraseña generada: <code></code> — cópiala y luego pulsa «{% if cuenta %}Guardar cambios{% else %}Crear cuenta{% endif %}».";
     aviso.querySelector("code").textContent = clave;
   });
 })();
