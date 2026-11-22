@@ -160,7 +160,9 @@ En FactureroMovil: **Reportes → Reporte de Factura** → rango de fechas → d
 | Estado «Autorizado SRI» / anulada / otro | Se importa / anulada / se omite |
 | Cobrada «SI» · Por cobrar «SI» con saldo | Pagada · abono parcial |
 | Cobrada «N/A» (no se usa ese módulo) | Lo eliges al importar: pendientes o pagadas |
-| Factura que ya existe en Novera | Se salta (puedes subir el reporte del año completo cada vez) |
+| Factura que ya existe en Novera | No se duplica (puedes subir el reporte del año completo cada vez) |
+| …y ahora FactureroMovil la marca «Cobrada» o con abono | Se registra solo el cobro que falte (fecha: el día de la reimportación) |
+| …y ahora está anulada en FactureroMovil | Se anula en Novera si no tiene pagos; si los tiene, aviso para revisarla |
 
 **Sin duplicados:** una factura se considera la misma si coincide su número en forma canónica
 (`676` = `001-001-676` = `001-001-000000676`) o su clave de acceso. Se comprueba en la vista previa, otra vez

@@ -99,7 +99,7 @@ class ImportacionTests(TestCase):
         self.assertEqual(Factura.objects.count(), 0, "analizar no debe escribir")
 
         creados = imp.aplicar(resultado)
-        self.assertEqual(creados, {"clientes": 3, "facturas": 5, "pagos": 1, "saltadas": 0})
+        self.assertEqual(creados, {"clientes": 3, "facturas": 5, "pagos": 1, "saltadas": 0, "cobros_actualizados": 0, "anuladas": 0})
 
         f71 = Factura.objects.get(numero="001-001-000000071")
         self.assertEqual(f71.cliente.nombre, "Edificio Central")
@@ -119,7 +119,7 @@ class ImportacionTests(TestCase):
         imp.aplicar(imp.analizar(self.ruta))
         segundo = imp.analizar(self.ruta)
         self.assertEqual(segundo.importables, [])
-        self.assertEqual(imp.aplicar(segundo), {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0})
+        self.assertEqual(imp.aplicar(segundo), {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0, "cobros_actualizados": 0, "anuladas": 0})
 
     def test_desconocidas_como_pagadas(self):
         imp.aplicar(imp.analizar(self.ruta, estado_desconocido="pagada"))
@@ -308,3 +308,67 @@ class DuplicadosTests(TestCase):
         ])))
         r = imp.analizar(self.reporte([101, 102]))
         self.assertEqual([f.numero for f in r.importables], ["001-001-000000102"])
+
+
+class ReimportacionCobrosTests(TestCase):
+    """Reimportar el reporte actualiza los cobros de facturas que ya están en Novera."""
+
+    def reporte(self, *filas):
+        return excel_facturero(list(filas))
+
+    def fila(self, n, total=115.0, **kw):
+        return fila_fm("2025-03-03", f"001-001-{n:09d}", round(total / 1.15, 2), round(total - total / 1.15, 2), total,
+                       "1790000001001", "EDIFICIO CENTRAL", **kw)
+
+    def setUp(self):
+        # Primera importación: FactureroMovil sin módulo de cobros (N/A) → quedan pendientes
+        imp.aplicar(imp.analizar(self.reporte(self.fila(101), self.fila(102), self.fila(103), self.fila(104))))
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobrada_y_abono_se_registran_una_sola_vez(self):
+        ruta = self.reporte(
+            self.fila(101, cobrada="SI"),
+            self.fila(102, por_cobrar="SI", saldo=65.0),  # abonaron 50
+            self.fila(103),                                # N/A: no se toca
+            self.fila(105),                                # nueva
+        )
+        r = imp.analizar(ruta)
+        res = r.resumen()
+        self.assertEqual((res["filas"], res["cobros_actualizados"]), (1, 2))
+        self.assertEqual(res["monto_cobros_actualizados"], Decimal("165.00"))
+        creados = imp.aplicar(r)
+        self.assertEqual((creados["facturas"], creados["cobros_actualizados"]), (1, 2))
+        estados = {f.numero[-3:]: f.estado for f in Factura.objects.con_saldos(date(2025, 3, 10))}
+        self.assertEqual(estados["101"], "PAGADA")
+        self.assertEqual(estados["102"], "PARCIAL")
+        self.assertEqual(estados["103"], "PENDIENTE")
+        # Reimportar otra vez el mismo archivo (o confirmar dos veces) no duplica cobros
+        self.assertEqual(imp.analizar(ruta).resumen()["cobros_actualizados"], 0)
+        self.assertEqual(imp.aplicar(r)["cobros_actualizados"], 0)
+        self.assertEqual(Pago.objects.count(), 2)
+
+    def test_lo_registrado_en_novera_manda(self):
+        f = Factura.objects.get(numero="001-001-000000102")
+        Pago.objects.create(factura=f, monto=Decimal("100.00"))
+        r = imp.analizar(self.reporte(self.fila(102, por_cobrar="SI", saldo=65.0)))  # FM dice 50 cobrado
+        self.assertEqual(r.resumen()["cobros_actualizados"], 0)
+        self.assertEqual(f.pagos.count(), 1)
+
+    def test_abono_y_luego_cobrada_completa_la_diferencia(self):
+        imp.aplicar(imp.analizar(self.reporte(self.fila(104, por_cobrar="SI", saldo=15.0))))
+        imp.aplicar(imp.analizar(self.reporte(self.fila(104, cobrada="SI"))))
+        f = Factura.objects.con_saldos().get(numero="001-001-000000104")
+        self.assertEqual((f.pagado, f.estado), (Decimal("115.00"), "PAGADA"))
+        self.assertEqual(f.pagos.count(), 2)
+
+    def test_anulada_en_facturero(self):
+        imp.aplicar(imp.analizar(self.reporte(self.fila(103, estado="Anulado"))))
+        self.assertTrue(Factura.objects.get(numero="001-001-000000103").anulada)
+        # Con pagos en Novera no se anula: solo se avisa
+        f = Factura.objects.get(numero="001-001-000000104")
+        Pago.objects.create(factura=f, monto=Decimal("10"))
+        r = imp.analizar(self.reporte(self.fila(104, estado="Anulado")))
+        self.assertIn("revísala a mano", " ".join(r.filas[0].avisos))
+        imp.aplicar(r)
+        f.refresh_from_db()
+        self.assertFalse(f.anulada)

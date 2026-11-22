@@ -29,6 +29,7 @@ from decimal import Decimal, InvalidOperation
 
 import openpyxl
 from django.db import transaction
+from django.utils import timezone
 
 from apps.clientes.models import Cliente
 
@@ -259,19 +260,25 @@ class Registro:
     """Números (canónicos) y claves de acceso ya vistos: en Novera o antes en el mismo archivo."""
 
     def __init__(self, desde_bd=True):
-        self.numeros = set()
-        self.claves = set()
+        self.numeros = {}  # número canónico -> pk de la factura (o None si solo se vio en el archivo)
+        self.claves = {}
         if desde_bd:
-            for numero, clave in Factura.objects.values_list("numero", "clave_acceso"):
-                self.agregar(numero, clave)
+            for pk, numero, clave in Factura.objects.values_list("pk", "numero", "clave_acceso"):
+                self.agregar(numero, clave, pk)
+
+    def buscar(self, numero, clave_acceso=""):
+        """pk de la factura ya registrada con ese número o clave (None si no existe)."""
+        if clave_acceso and clave_acceso in self.claves:
+            return self.claves[clave_acceso]
+        return self.numeros.get(clave_numero(numero))
 
     def contiene(self, numero, clave_acceso=""):
         return clave_numero(numero) in self.numeros or bool(clave_acceso and clave_acceso in self.claves)
 
-    def agregar(self, numero, clave_acceso=""):
-        self.numeros.add(clave_numero(numero))
+    def agregar(self, numero, clave_acceso="", pk=None):
+        self.numeros.setdefault(clave_numero(numero), pk)
         if clave_acceso:
-            self.claves.add(clave_acceso)
+            self.claves.setdefault(clave_acceso, pk)
 
 
 # ---------------------------------------------------------------- análisis
@@ -306,6 +313,10 @@ class FilaImportada:
     avisos: list[str] = field(default_factory=list)
     omitida: bool = False
     ya_existe: bool = False
+    cobro_informado: Decimal | None = None  # lo cobrado según FactureroMovil (None = no lo informa)
+    existente_pk: int | None = None
+    actualizar: str = ""  # "" | "cobro" | "anular": cambios sobre una factura que ya está en Novera
+    cobro_nuevo: Decimal = Decimal("0.00")
 
 
 @dataclass
@@ -322,6 +333,10 @@ class Resultado:
     @property
     def omitidas(self):
         return [f for f in self.filas if f.omitida]
+
+    @property
+    def actualizables(self):
+        return [f for f in self.filas if f.actualizar]
 
     @property
     def con_avisos(self):
@@ -347,6 +362,9 @@ class Resultado:
             "filas": len(filas),
             "omitidas": sum(1 for f in self.omitidas if not f.ya_existe),
             "ya_existen": sum(1 for f in self.filas if f.ya_existe),
+            "cobros_actualizados": sum(1 for f in self.filas if f.actualizar == "cobro"),
+            "monto_cobros_actualizados": sum((f.cobro_nuevo for f in self.filas if f.actualizar == "cobro"), Decimal("0")),
+            "anulaciones": sum(1 for f in self.filas if f.actualizar == "anular"),
             "con_avisos": len(self.con_avisos),
             "pagadas": sum(1 for f in filas if f.accion == "pagada"),
             "pendientes": sum(1 for f in filas if f.accion == "pendiente"),
@@ -556,17 +574,20 @@ def _analizar_facturero(ws, fila_encabezado, cols, estado_desconocido="pendiente
             saldo = a_decimal(v("saldo_cobrar"))
             if cobrada in SI:
                 fila.accion = "pagada"
+                fila.cobro_informado = fila.total
             elif por_cobrar in SI:
                 fila.accion = "pendiente"
+                fila.cobro_informado = Decimal("0.00")
                 if saldo is not None and Decimal("0") < saldo < fila.total:
                     fila.abonado = redondear(fila.total - saldo)
+                    fila.cobro_informado = fila.abonado
             else:
                 fila.accion = estado_desconocido
 
         if existentes.contiene(fila.numero, fila.clave_acceso):
             fila.omitida = True
             fila.ya_existe = True
-            fila.avisos.append("Ya existe en Novera")
+            fila.existente_pk = existentes.buscar(fila.numero, fila.clave_acceso)
         elif vistos.contiene(fila.numero, fila.clave_acceso):
             fila.omitida = True
             fila.avisos.append("Repetida en el archivo")
@@ -574,7 +595,37 @@ def _analizar_facturero(ws, fila_encabezado, cols, estado_desconocido="pendiente
 
     if not filas:
         return Resultado(filas=[], catalogo={}, formato="FactureroMovil", errores=["El reporte no tiene facturas."])
+    _planificar_actualizaciones([f for f in filas if f.ya_existe])
     return Resultado(filas=filas, catalogo={}, formato="FactureroMovil")
+
+
+def _planificar_actualizaciones(filas):
+    """Para facturas que ya están en Novera: qué cambió en FactureroMovil (cobros y anulaciones).
+
+    Lo registrado en Novera manda: solo se AÑADE el cobro que falte (nunca se quitan pagos) y solo se anula
+    si la factura no tiene pagos. Si FactureroMovil no informa el cobro («Cobrada: N/A»), no se toca nada.
+    """
+    actuales = {f.pk: f for f in Factura.objects.con_saldos().filter(pk__in=[x.existente_pk for x in filas if x.existente_pk])}
+    for fila in filas:
+        factura = actuales.get(fila.existente_pk)
+        if factura is None:
+            fila.avisos.append("Ya existe en Novera")
+            continue
+        if fila.accion == "anulada" and not factura.anulada:
+            if factura.pagado > 0:
+                fila.avisos.append("Anulada en FactureroMovil, pero en Novera tiene pagos: revísala a mano")
+            else:
+                fila.actualizar = "anular"
+                fila.avisos.append("Ya existe: se anulará (está anulada en FactureroMovil)")
+            continue
+        if fila.cobro_informado is not None and not factura.anulada:
+            falta = min(fila.cobro_informado, factura.total) - factura.pagado
+            if falta > 0:
+                fila.actualizar = "cobro"
+                fila.cobro_nuevo = redondear(falta)
+                fila.avisos.append(f"Ya existe: se registrará un cobro de ${fila.cobro_nuevo:,.2f} informado por FactureroMovil")
+                continue
+        fila.avisos.append("Ya existe en Novera (sin cambios)")
 
 
 # ---------------------------------------------------------------- Excel histórico
@@ -704,7 +755,7 @@ def aplicar(resultado, usuario=None, dias_credito=30):
     todos = list(Cliente.objects.all())
     por_clave = {clave_cliente(c.nombre): c for c in todos}
     por_ruc = {c.identificacion: c for c in todos if c.identificacion}
-    creados = {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0}
+    creados = {"clientes": 0, "facturas": 0, "pagos": 0, "saltadas": 0, "cobros_actualizados": 0, "anuladas": 0}
     # Se vuelve a comprobar aquí: entre la vista previa y la confirmación pudo importarse lo mismo
     registradas = Registro()
 
@@ -781,4 +832,33 @@ def aplicar(resultado, usuario=None, dias_credito=30):
                 creado_por=usuario,
             )
             creados["pagos"] += 1
+
+    _aplicar_actualizaciones(resultado.actualizables, usuario, creados)
     return creados
+
+
+def _aplicar_actualizaciones(filas, usuario, creados):
+    hoy = timezone.localdate()
+    actuales = {
+        f.pk: f
+        for f in Factura.objects.con_saldos().select_for_update(of=("self",)).filter(pk__in=[x.existente_pk for x in filas])
+    }
+    for fila in filas:
+        factura = actuales.get(fila.existente_pk)
+        if factura is None or factura.anulada:
+            continue
+        if fila.actualizar == "anular":
+            if not factura.pagos.exists():
+                factura.anulada = True
+                factura.fecha_anulacion = hoy
+                factura.motivo_anulacion = "Anulada en FactureroMovil"
+                factura.save(update_fields=["anulada", "fecha_anulacion", "motivo_anulacion", "actualizado"])
+                creados["anuladas"] += 1
+        elif fila.actualizar == "cobro":
+            falta = redondear(min(fila.cobro_informado, factura.total) - factura.total_pagado())
+            if falta > 0:
+                Pago.objects.create(
+                    factura=factura, fecha=hoy, forma=Pago.Forma.OTRO, referencia="Importación FactureroMovil",
+                    monto=falta, notas="Cobro informado por FactureroMovil al reimportar el reporte", creado_por=usuario,
+                )
+                creados["cobros_actualizados"] += 1

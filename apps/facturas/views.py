@@ -422,16 +422,22 @@ def importar(request):
             return redirect("facturas:lista")
         finally:
             archivo.unlink(missing_ok=True)
-        if not creados["facturas"]:
-            messages.info(request, "No había facturas nuevas en ese archivo: todo ya estaba en Novera.")
-            return redirect("facturas:lista")
-        mensaje = (
-            f"Importación completa: {creados['facturas']} facturas, {creados['pagos']} pagos "
-            f"y {creados['clientes']} clientes nuevos."
-        )
-        if creados["saltadas"]:
-            mensaje += f" {creados['saltadas']} ya existían y se saltaron."
-        messages.success(request, mensaje)
+        partes = []
+        if creados["facturas"]:
+            partes.append(
+                f"{creados['facturas']} factura{'s' if creados['facturas'] != 1 else ''} nueva{'s' if creados['facturas'] != 1 else ''}, "
+                f"{creados['pagos']} pago{'s' if creados['pagos'] != 1 else ''} y {creados['clientes']} cliente{'s' if creados['clientes'] != 1 else ''} nuevo{'s' if creados['clientes'] != 1 else ''}"
+            )
+        if creados["cobros_actualizados"]:
+            n = creados["cobros_actualizados"]
+            partes.append(f"cobro actualizado en {n} factura{'s' if n != 1 else ''} que ya existía{'n' if n != 1 else ''}")
+        if creados["anuladas"]:
+            n = creados["anuladas"]
+            partes.append(f"{n} factura{'s' if n != 1 else ''} anulada{'s' if n != 1 else ''}")
+        if not partes:
+            messages.info(request, "No había nada nuevo en ese archivo: todo ya estaba en Novera y al día.")
+        else:
+            messages.success(request, "Importación completa: " + "; ".join(partes) + ".")
         return redirect("facturas:lista")
 
     form = ImportarForm(request.POST or None, request.FILES or None)

@@ -6,7 +6,11 @@
   <form method="post" class="acciones">
     {% csrf_token %}
     <button class="boton" name="accion" value="cancelar">Cancelar</button>
-    <button class="boton primario" name="accion" value="confirmar" {% if not resumen.filas %}disabled{% endif %}>Importar {{ resumen.filas }} documento{{ resumen.filas|pluralize }}</button>
+    {% with cambios=resumen.cobros_actualizados|add:resumen.anulaciones %}
+    <button class="boton primario" name="accion" value="confirmar" {% if not resumen.filas and not cambios %}disabled{% endif %}>
+      {% if resumen.filas %}Importar {{ resumen.filas }} nueva{{ resumen.filas|pluralize }}{% if cambios %} y actualizar {{ cambios }}{% endif %}{% elif cambios %}Actualizar {{ cambios }} factura{{ cambios|pluralize }}{% else %}Nada que importar{% endif %}
+    </button>
+    {% endwith %}
   </form>
 </div>
 
@@ -14,13 +18,15 @@
   <div class="kpi"><span>A importar</span><strong>{{ resumen.filas }}</strong><small>{{ resumen.clientes_nuevos }} clientes nuevos</small></div>
   <div class="kpi"><span>Pagadas / pendientes / anuladas</span><strong>{{ resumen.pagadas }} / {{ resumen.pendientes }} / {{ resumen.anuladas }}</strong></div>
   <div class="kpi"><span>Facturado / quedaría por cobrar</span><strong>{{ resumen.facturado|dinero }}</strong><small>{{ resumen.por_cobrar|dinero }} por cobrar</small></div>
-  <div class="kpi neutro"><span>Ya están en Novera</span><strong>{{ resumen.ya_existen }}</strong><small>se saltan, no se duplican</small></div>
+  <div class="kpi neutro"><span>Ya están en Novera</span><strong>{{ resumen.ya_existen }}</strong><small>no se duplican</small></div>
+  <div class="kpi verde"><span>Cobros a actualizar</span><strong>{{ resumen.cobros_actualizados }}</strong><small>{{ resumen.monto_cobros_actualizados|dinero }} informados por FactureroMovil{% if resumen.anulaciones %} · {{ resumen.anulaciones }} a anular{% endif %}</small></div>
   <div class="kpi alerta"><span>Con avisos / omitidas</span><strong>{{ resumen.con_avisos }} / {{ resumen.omitidas }}</strong></div>
 </section>
 
 {% if resumen.filas == 0 and resumen.ya_existen %}
-<div class="mensaje">Todas las facturas de este archivo ya están en Novera: no hay nada nuevo que importar.</div>
+<div class="mensaje">Todas las facturas de este archivo ya están en Novera{% if resumen.cobros_actualizados or resumen.anulaciones %}: solo se actualizarán sus cobros y anulaciones{% else %} y al día: no hay nada que importar{% endif %}.</div>
 {% endif %}
+<p class="tenue">Al reimportar, las facturas que ya existen <strong>no se duplican</strong>: si FactureroMovil las marca como cobradas (o con abono) se registra solo el cobro que falta en Novera, con fecha de hoy. Los pagos registrados en Novera nunca se borran.</p>
 <label class="interruptor"><input type="checkbox" id="solo-avisos"> Mostrar solo filas con avisos</label>
 <div class="tarjeta sin-relleno desplazable">
 <table class="lista" id="preview">
@@ -28,13 +34,16 @@
     <th class="num">Valor</th><th class="num">IVA</th><th class="num">Total</th><th>Queda</th><th>Avisos</th></tr></thead>
   <tbody>
   {% for f in resultado.filas %}
-    <tr class="{% if f.omitida %}omitida{% endif %}" data-avisos="{{ f.avisos|length }}">
+    <tr class="{% if f.omitida and not f.actualizar %}omitida{% endif %}" data-avisos="{% if f.ya_existe and not f.actualizar %}0{% else %}{{ f.avisos|length }}{% endif %}">
       <td>{{ f.fila }}</td><td>{{ f.numero|default:"—" }}</td><td>{{ f.periodo|date:"m/Y" }}</td>
       <td>{{ f.fecha_emision|date:"d/m/Y" }}</td><td>{{ f.cliente|default:"—" }}</td>
       <td class="recorte" title="{{ f.objeto }}">{{ f.objeto }}</td>
       <td class="num">{{ f.subtotal|dinero }}</td><td class="num">{{ f.iva|dinero }} <small>{{ f.porcentaje_iva|floatformat:"-1" }}%</small></td>
       <td class="num">{{ f.total|dinero }}</td>
-      <td>{% if f.omitida %}<span class="estado anulada">Omitida</span>{% else %}{{ f.accion|capfirst }}{% endif %}</td>
+      <td>{% if f.actualizar == "cobro" %}<span class="estado pagada">Actualiza cobro</span>
+        {% elif f.actualizar == "anular" %}<span class="estado vencida">Se anula</span>
+        {% elif f.ya_existe %}<span class="estado anulada">Ya existe</span>
+        {% elif f.omitida %}<span class="estado anulada">Omitida</span>{% else %}{{ f.accion|capfirst }}{% endif %}</td>
       <td class="avisos">{{ f.avisos|join:" · " }}</td>
     </tr>
   {% endfor %}
