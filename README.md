@@ -24,6 +24,27 @@ cada factura se calcula solo.
 - Panel de administración de Django en `/admin/` (incluye la acción «Fusionar clientes» para unificar
   un mismo cliente escrito de varias formas).
 
+### Menú de inicio y roles
+
+Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de iconos según el rol:
+
+| Rol | Menú |
+|---|---|
+| Administrador / Manager | Administrar clientes · Órdenes de trabajo (y proformas) · Asignar tareas · Cargar datos financieros · Revisar información general (panel) |
+| Técnico | Mis tareas · Mis órdenes de trabajo (solo las suyas; no ve facturas, clientes ni el panel) |
+
+### Órdenes de trabajo (`apps/trabajos`)
+
+- **Proforma** (`PF-00001`): cotización al cliente con líneas (mano de obra / material, cantidad, precio) e IVA.
+  Estados: borrador → enviada → aprobada o rechazada. **Al aprobarse genera la orden de trabajo** con el cliente,
+  el trabajo y las líneas de material como materiales.
+- **Orden de trabajo** (`OT-00001`): cliente, trabajo, lugar, horas estimadas, fecha de inicio y de finalización,
+  materiales y herramientas. Estados: pendiente, en curso, terminada, cancelada.
+- **Tareas**: qué técnico hace qué orden, con sus responsabilidades, fecha límite y horas. El técnico las ve en
+  «Mis tareas» y marca su avance (en curso / hecha, con comentario).
+
+Pendiente para la siguiente entrega: recibos y notas de crédito.
+
 ## Stack
 
 | Pieza | Tecnología |

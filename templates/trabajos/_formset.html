@@ -1,0 +1,39 @@
+{% load trabajos %}
+{# Tabla editable de un formset. Variables: fs (formset), columnas (lista de nombres de campo), importe (bool) #}
+<div class="formset" data-formset="{{ fs.prefix }}">
+  {{ fs.management_form }}
+  {% for e in fs.non_form_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+  <div class="desplazable">
+  <table class="tabla-formset">
+    <thead><tr>
+      {% for campo in fs.empty_form.visible_fields %}{% if campo.name != "DELETE" %}<th class="col-{{ campo.name }}">{{ campo.label }}</th>{% endif %}{% endfor %}
+      {% if importe %}<th class="num">Importe</th>{% endif %}<th></th>
+    </tr></thead>
+    <tbody data-filas>
+    {% for f in fs %}
+      <tr data-fila data-existente="{% if f.instance.pk %}1{% else %}0{% endif %}" {% if f.DELETE.value %}hidden{% endif %}>
+        {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+        {% for campo in f.visible_fields %}
+          {% if campo.name == "DELETE" %}<td hidden>{{ campo }}</td>{% else %}
+          <td class="col-{{ campo.name }}{% if campo.errors %} con-error{% endif %}">{{ campo }}{% for e in campo.errors %}<small class="error">{{ e }}</small>{% endfor %}</td>
+          {% endif %}
+        {% endfor %}
+        {% if importe %}<td class="num" data-importe>—</td>{% endif %}
+        <td><button type="button" class="enlace rojo" data-quitar aria-label="Quitar línea">Quitar</button></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button type="button" class="boton chico" data-agregar>+ Añadir línea</button>
+  <template id="{{ fs.prefix }}-vacio">
+    <tr data-fila data-existente="0">
+      {% for h in fs.empty_form.hidden_fields %}{{ h }}{% endfor %}
+      {% for campo in fs.empty_form.visible_fields %}
+        {% if campo.name == "DELETE" %}<td hidden>{{ campo }}</td>{% else %}<td class="col-{{ campo.name }}">{{ campo }}</td>{% endif %}
+      {% endfor %}
+      {% if importe %}<td class="num" data-importe>—</td>{% endif %}
+      <td><button type="button" class="enlace rojo" data-quitar aria-label="Quitar línea">Quitar</button></td>
+    </tr>
+  </template>
+</div>

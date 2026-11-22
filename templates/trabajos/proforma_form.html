@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">← Volver</a>
+<div class="encabezado"><h1>{{ titulo }}</h1></div>
+<form method="post" class="formulario">
+  {% csrf_token %}
+  <section class="tarjeta">
+    <h2>Datos</h2>
+    <div class="campos campos-doc">{% include "_campos.html" %}</div>
+  </section>
+  <section class="tarjeta">
+    <h2>Detalle de la cotización</h2>
+    <p class="tenue">Las líneas de tipo <strong>Material</strong> pasarán a la lista de materiales de la orden de trabajo al aprobarse.</p>
+    {% include "trabajos/_formset.html" with fs=lineas importe=True %}
+    <div class="resumen-montos" id="resumen-proforma">
+      <div><span>Subtotal</span><strong id="r-subtotal">$0.00</strong></div>
+      <div><span>IVA</span><strong id="r-iva">$0.00</strong></div>
+      <div class="total"><span>Total</span><strong id="r-total">$0.00</strong></div>
+    </div>
+  </section>
+  <div class="acciones"><button class="boton primario">Guardar proforma</button>
+    <a href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">Cancelar</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/formset.js' %}"></script>{% endblock %}

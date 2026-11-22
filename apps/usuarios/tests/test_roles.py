@@ -74,7 +74,7 @@ class SeleccionDeRolTests(TestCase):
         self.client.force_login(self.u)
         for malo in ["/cuentas/logout/", "/admin/logout/", "/cuentas/login/", "https://malicioso.test/"]:
             r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": malo})
-            self.assertEqual(r.url, reverse("dashboard"), malo)
+            self.assertEqual(r.url, reverse("inicio"), malo)
 
     def test_no_puede_elegir_un_rol_sin_acceso(self):
         asignar_roles(self.u, [TECNICO])

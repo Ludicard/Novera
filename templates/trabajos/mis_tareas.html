@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load trabajos %}
+{% block title %}Mis tareas{% endblock %}
+{% block content %}
+<div class="encabezado"><div><h1>Mis tareas</h1><span class="tenue">Órdenes de trabajo que tienes asignadas</span></div></div>
+<nav class="pestanas">
+  <a class="pestana {% if ver == 'pendientes' %}activa{% endif %}" href="?ver=pendientes"><span>Pendientes</span><b>{{ conteos.pendientes }}</b></a>
+  <a class="pestana {% if ver == 'hechas' %}activa{% endif %}" href="?ver=hechas"><span>Hechas</span><b>{{ conteos.hechas }}</b></a>
+</nav>
+<div class="tareas">
+{% for t in tareas %}
+  <article class="tarjeta tarea-tarjeta {% if t.atrasada %}atrasada{% endif %}">
+    <div class="tarea-cab">
+      <a class="numero" href="{{ t.orden.get_absolute_url }}">{{ t.orden.numero }}</a>
+      <strong>{{ t.orden.titulo }}</strong>
+      {% insignia t %}
+    </div>
+    <p class="tenue">{{ t.orden.cliente }}{% if t.orden.ubicacion %} · {{ t.orden.ubicacion }}{% endif %}</p>
+    <p class="pre">{{ t.responsabilidades }}</p>
+    <p class="tenue">{% if t.fecha_limite %}<span class="{% if t.atrasada %}rojo{% endif %}">Hasta el {{ t.fecha_limite|date:"d/m/Y" }}</span>{% endif %}{% if t.horas_estimadas %} · {{ t.horas_estimadas|floatformat:"-1" }} h estimadas{% endif %}</p>
+    <form method="post" action="{% url 'trabajos:tarea_avance' t.pk %}" class="avance">
+      {% csrf_token %}
+      <label>Estado {{ t.form.estado }}</label>
+      <label class="crece">Comentario {{ t.form.comentario }}</label>
+      <button class="boton primario">Guardar</button>
+    </form>
+    <a href="{{ t.orden.get_absolute_url }}">Ver la orden: materiales y herramientas →</a>
+  </article>
+{% empty %}
+  <div class="tarjeta vacio"><h2>{% if ver == 'hechas' %}Aún no has terminado tareas{% else %}No tienes tareas pendientes{% endif %}</h2>
+    <p class="tenue">Cuando te asignen una orden de trabajo aparecerá aquí.</p></div>
+{% endfor %}
+</div>
+{% endblock %}

@@ -4,7 +4,15 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .roles import SESION_ROL, roles_de, roles_disponibles
+from django.contrib import messages
+
+from .roles import SESION_ROL, TECNICO, roles_de, roles_disponibles
+
+# Secciones que no corresponden al rol Técnico (su menú: Mis tareas y sus órdenes de trabajo)
+SOLO_GESTION = (
+    "/panel/", "/facturas/", "/clientes/", "/finanzas/", "/usuarios/",
+    "/trabajos/proformas/", "/trabajos/asignar/", "/trabajos/ordenes/nueva/",
+)
 
 # Rutas que funcionan sin rol elegido (o sin rol): estáticos, salud, salir, contraseña y el propio selector
 PREFIJOS_LIBRES = ("/static/", "/media/", "/salud/", "/cuentas/password_", "/cuentas/reset/")
@@ -47,6 +55,9 @@ class RolMiddleware:
             return render(request, "usuarios/sin_rol.html", status=403)
         if request.rol is None:
             return redirect(self._selector(request))
+        if request.rol == TECNICO and ruta.startswith(SOLO_GESTION):
+            messages.info(request, "Esa sección no está disponible con el rol Técnico.")
+            return redirect("inicio")
         return self.get_response(request)
 
     @staticmethod

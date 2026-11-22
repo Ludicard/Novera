@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% load trabajos %}
+{% block title %}Asignar tareas{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'inicio' %}">← Inicio</a>
+<div class="encabezado"><div><h1>Asignar tareas</h1><span class="tenue">Qué técnico realiza qué orden de trabajo y con qué responsabilidades</span></div></div>
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <h2>Nueva asignación</h2>
+    {% if hay_tecnicos %}
+    <form method="post" class="formulario">
+      {% csrf_token %}
+      {% include "_campos.html" %}
+      <div class="acciones"><button class="boton primario">Asignar</button></div>
+    </form>
+    {% else %}
+    <p class="mensaje warning">Todavía no hay cuentas con el rol Técnico.
+      {% if rol == "administrador" %}<a href="{% url 'usuarios:nueva' %}">Crea una en Usuarios</a> y vuelve aquí.{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>Órdenes sin técnico {% if sin_tecnico %}<span class="contador rojo-fondo">{{ sin_tecnico|length }}</span>{% endif %}</h2>
+    {% for o in sin_tecnico %}
+    <div class="fila-simple">
+      <div><a href="{{ o.get_absolute_url }}" class="numero">{{ o.numero }}</a> {{ o.titulo }}<small class="tenue bloque">{{ o.cliente }}{% if o.fecha_inicio %} · inicia {{ o.fecha_inicio|date:"d/m" }}{% endif %}</small></div>
+      <a class="boton chico" href="?orden={{ o.pk }}#id_tecnico">Asignar</a>
+    </div>
+    {% empty %}<p class="tenue">Todas las órdenes abiertas tienen técnico. 👍</p>{% endfor %}
+
+    <h2 class="seccion-chica">Carga de cada técnico</h2>
+    {% for t in carga %}
+    <div class="fila-simple"><span>{{ t|nombre }}</span><span><b>{{ t.pendientes }}</b> pendiente{{ t.pendientes|pluralize }} <small class="tenue">· {{ t.hechas }} hecha{{ t.hechas|pluralize }}</small></span></div>
+    {% empty %}<p class="tenue">Sin técnicos todavía.</p>{% endfor %}
+  </section>
+</div>
+
+<section class="tarjeta sin-relleno desplazable">
+  <table class="lista facturas">
+    <thead><tr><th>Orden</th><th>Técnico</th><th>Responsabilidades</th><th class="ocultar-movil">Fecha límite</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for t in recientes %}
+      <tr>
+        <td class="nowrap"><a class="numero" href="{{ t.orden.get_absolute_url }}">{{ t.orden.numero }}</a><small class="tenue bloque">{{ t.orden.cliente }}</small></td>
+        <td class="nowrap">{{ t.tecnico|nombre }}</td>
+        <td class="cliente-celda"><span class="recorte bloque" title="{{ t.responsabilidades }}">{{ t.responsabilidades }}</span></td>
+        <td class="nowrap ocultar-movil {% if t.atrasada %}rojo{% endif %}">{{ t.fecha_limite|date:"d/m/Y"|default:"—" }}</td>
+        <td>{% insignia t %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="5" class="vacio-tabla">No hay tareas abiertas.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -47,7 +47,7 @@ def elegir_rol(request):
         clave = request.POST.get("rol")
         if clave in disponibles:
             request.session[SESION_ROL] = clave
-            respuesta = redirect(siguiente or "dashboard")
+            respuesta = redirect(siguiente or "inicio")
             respuesta.set_cookie(
                 COOKIE_ULTIMO_ROL, clave, max_age=365 * 24 * 3600, httponly=True, samesite="Lax",
                 secure=request.is_secure(),
@@ -90,7 +90,7 @@ def solo_administrador(vista):
     def envoltura(request, *args, **kwargs):
         if request.rol != ADMINISTRADOR:
             messages.error(request, "La gestión de usuarios es solo para el rol Administrador.")
-            return redirect("dashboard")
+            return redirect("inicio")
         return vista(request, *args, **kwargs)
 
     return envoltura

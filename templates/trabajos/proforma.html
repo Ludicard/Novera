@@ -1,0 +1,60 @@
+{% extends "base.html" %}{% load novera trabajos %}
+{% block title %}{{ p.numero }}{% endblock %}
+{% block content %}
+<a class="volver no-imprimir" href="{% url 'trabajos:proformas' %}">← Proformas</a>
+<div class="encabezado">
+  <div><span class="tenue">Proforma · {{ p.fecha|date:"d/m/Y" }} · válida {{ p.validez_dias }} días</span><h1>{{ p.numero }} {% insignia p %}</h1></div>
+  <div class="acciones-encabezado no-imprimir">
+    <button type="button" class="boton" onclick="window.print()">⎙ Imprimir</button>
+    {% if p.editable %}<a class="boton" href="{% url 'trabajos:proforma_editar' p.pk %}">Editar</a>{% endif %}
+    <form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">
+      {% csrf_token %}
+      {% if p.estado == "BORRADOR" %}<button class="boton" name="accion" value="enviar">Marcar como enviada</button>{% endif %}
+      {% if p.editable %}
+        <button class="boton texto-rojo" name="accion" value="rechazar" onclick="return confirm('¿El cliente rechazó la proforma?')">Rechazada</button>
+        <button class="boton primario" name="accion" value="aprobar" onclick="return confirm('¿Aprobar la proforma y generar la orden de trabajo?')">✓ Aprobada: generar orden</button>
+      {% endif %}
+      {% if p.estado == "RECHAZADA" %}<button class="boton" name="accion" value="reabrir">Volver a borrador</button>{% endif %}
+    </form>
+  </div>
+</div>
+
+{% if orden %}<div class="mensaje success no-imprimir">Generó la orden de trabajo <a href="{{ orden.get_absolute_url }}">{{ orden.numero }}</a> ({{ orden.get_estado_display|lower }}).</div>{% endif %}
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <h2>Cliente</h2>
+    <dl class="datos">
+      <dt>Nombre</dt><dd><a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a></dd>
+      {% if p.cliente.identificacion %}<dt>RUC / Cédula</dt><dd>{{ p.cliente.identificacion }}</dd>{% endif %}
+      {% if p.cliente.direccion %}<dt>Dirección</dt><dd>{{ p.cliente.direccion }}</dd>{% endif %}
+      {% if p.cliente.email %}<dt>Email</dt><dd>{{ p.cliente.email }}</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="tarjeta">
+    <h2>{{ p.titulo }}</h2>
+    {% if p.descripcion %}<p class="pre">{{ p.descripcion }}</p>{% else %}<p class="tenue">Sin detalle adicional.</p>{% endif %}
+    {% if p.fecha_respuesta %}<p class="tenue">{{ p.get_estado_display }} el {{ p.fecha_respuesta|date:"d/m/Y" }}.</p>{% endif %}
+  </section>
+</div>
+
+<section class="tarjeta">
+  <div class="desplazable">
+  <table>
+    <thead><tr><th>Descripción</th><th class="ocultar-movil">Tipo</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Importe</th></tr></thead>
+    <tbody>
+    {% for l in lineas %}
+      <tr><td>{{ l.descripcion }}</td><td class="ocultar-movil tenue">{{ l.get_tipo_display }}</td>
+        <td class="num">{{ l.cantidad|floatformat:"-2" }} {{ l.unidad }}</td><td class="num">{{ l.precio_unitario|dinero }}</td><td class="num">{{ l.importe|dinero }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="resumen-montos">
+    <div><span>Subtotal</span><strong>{{ p.subtotal|dinero }}</strong></div>
+    <div><span>IVA {{ p.porcentaje_iva|floatformat:"-2" }} %</span><strong>{{ p.iva|dinero }}</strong></div>
+    <div class="total"><span>Total</span><strong>{{ p.total|dinero }}</strong></div>
+  </div>
+  {% if p.notas %}<p class="pre tenue">{{ p.notas }}</p>{% endif %}
+</section>
+{% endblock %}

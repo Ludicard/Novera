@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Inicio{% endblock %}
+{% block content %}
+<div class="inicio">
+  <div class="inicio-cabecera">
+    <div>
+      <p class="tenue">Hola, {{ user.get_short_name|default:user.username }}</p>
+      <h1>{{ rol_nombre_largo }}</h1>
+    </div>
+    <span class="tenue">{% now "l j \d\e F" %}</span>
+  </div>
+  <div class="mosaicos">
+    {% for m in mosaicos %}
+    <a class="mosaico acento-{{ m.color }}{% if m.ancho %} ancho{% endif %}" href="{{ m.url }}">
+      <span class="mosaico-icono">{% include "_icono_menu.html" with icono=m.icono %}</span>
+      <span class="mosaico-texto">
+        <strong>{{ m.titulo }}</strong>
+        <small>{{ m.dato }}</small>
+        {% if m.alerta %}<em>{{ m.alerta }}</em>{% endif %}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

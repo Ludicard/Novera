@@ -1,0 +1,85 @@
+{% extends "base.html" %}{% load novera trabajos %}
+{% block title %}{{ o.numero }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'trabajos:ordenes' %}">← Órdenes de trabajo</a>
+<div class="encabezado">
+  <div><span class="tenue">Orden de trabajo · {{ o.cliente }}</span><h1>{{ o.numero }} {% insignia o %}</h1></div>
+  {% if gestiona %}
+  <div class="acciones-encabezado">
+    <form method="post" action="{% url 'trabajos:orden_estado' o.pk %}" class="en-linea selector-estado">
+      {% csrf_token %}
+      <label class="tenue">Estado
+        <select name="estado" onchange="this.form.submit()">{% for v, t in estados %}<option value="{{ v }}" {% if v == o.estado %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+      </label>
+      <noscript><button class="boton chico">Cambiar</button></noscript>
+    </form>
+    <a class="boton" href="{% url 'trabajos:orden_editar' o.pk %}">Editar</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <h2>{{ o.titulo }}</h2>
+    <dl class="datos">
+      <dt>Cliente</dt><dd>{% if gestiona %}<a href="{{ o.cliente.get_absolute_url }}">{{ o.cliente }}</a>{% else %}{{ o.cliente }}{% endif %}</dd>
+      {% if o.ubicacion %}<dt>Lugar</dt><dd>{{ o.ubicacion }}</dd>{% endif %}
+      {% if o.cliente.telefono %}<dt>Teléfono</dt><dd>{{ o.cliente.telefono }}</dd>{% endif %}
+      <dt>Inicio</dt><dd>{{ o.fecha_inicio|date:"d/m/Y"|default:"Por definir" }}</dd>
+      <dt>Finalización</dt><dd>{{ o.fecha_fin|date:"d/m/Y"|default:"Por definir" }}{% if o.atrasada %} <span class="rojo">· atrasada</span>{% endif %}</dd>
+      <dt>Horas estimadas</dt><dd>{{ o.horas_estimadas|floatformat:"-1"|default:"Por definir" }}</dd>
+      {% if gestiona and o.proforma %}<dt>Proforma</dt><dd><a href="{{ o.proforma.get_absolute_url }}">{{ o.proforma.numero }}</a> · {{ o.proforma.total|dinero }}</dd>{% endif %}
+    </dl>
+    {% if o.descripcion %}<h3>Detalle</h3><p class="pre">{{ o.descripcion }}</p>{% endif %}
+    {% if o.notas %}<h3>Notas</h3><p class="pre tenue">{{ o.notas }}</p>{% endif %}
+  </section>
+  <section class="tarjeta">
+    <h2>Materiales</h2>
+    {% if materiales %}<ul class="lista-recursos">{% for r in materiales %}<li><span>{{ r.descripcion }}</span><b>{{ r.cantidad|floatformat:"-2" }} {{ r.unidad }}</b></li>{% endfor %}</ul>
+    {% else %}<p class="tenue">Sin materiales.</p>{% endif %}
+    <h2 class="seccion-chica">Herramientas</h2>
+    {% if herramientas %}<ul class="lista-recursos">{% for r in herramientas %}<li><span>{{ r.descripcion }}</span><b>{{ r.cantidad|floatformat:"-2" }} {{ r.unidad }}</b></li>{% endfor %}</ul>
+    {% else %}<p class="tenue">Sin herramientas.</p>{% endif %}
+    {% if gestiona %}<a class="enlace" href="{% url 'trabajos:orden_editar' o.pk %}">Editar materiales y herramientas</a>{% endif %}
+  </section>
+</div>
+
+<section class="tarjeta">
+  <h2>Técnicos y responsabilidades</h2>
+  {% if tareas %}
+  <div class="tareas">
+    {% for t in tareas %}
+    <div class="tarea {% if t.tecnico == user %}mia{% endif %}">
+      <div class="tarea-cab">
+        <strong>{{ t.tecnico|nombre }}{% if t.tecnico == user %} (tú){% endif %}</strong>
+        {% insignia t %}
+        {% if t.fecha_limite %}<small class="{% if t.atrasada %}rojo{% else %}tenue{% endif %}">hasta {{ t.fecha_limite|date:"d/m/Y" }}</small>{% endif %}
+        {% if t.horas_estimadas %}<small class="tenue">{{ t.horas_estimadas|floatformat:"-1" }} h</small>{% endif %}
+      </div>
+      <p class="pre">{{ t.responsabilidades }}</p>
+      {% if t.comentario %}<p class="comentario">💬 {{ t.comentario }}</p>{% endif %}
+      {% if gestiona %}
+      <form method="post" action="{% url 'trabajos:tarea_quitar' t.pk %}" onsubmit="return confirm('¿Quitar a {{ t.tecnico|nombre|escapejs }} de esta orden?')">
+        {% csrf_token %}<button class="enlace rojo">Quitar asignación</button>
+      </form>
+      {% elif t.tecnico == user %}
+      <a class="boton chico" href="{% url 'trabajos:mis_tareas' %}">Actualizar mi avance</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="tenue">Aún no hay técnicos asignados.</p>{% endif %}
+
+  {% if gestiona and o.estado != "TERMINADA" and o.estado != "CANCELADA" %}
+  <h3>Asignar un técnico</h3>
+  {% if hay_tecnicos %}
+  <form method="post" action="{% url 'trabajos:asignar' %}" class="formulario">
+    {% csrf_token %}
+    <input type="hidden" name="volver" value="orden">
+    <div class="campos campos-doc">{% with form=tarea_form %}{% include "_campos.html" %}{% endwith %}</div>
+    <div class="acciones"><button class="boton primario">Asignar</button></div>
+  </form>
+  {% else %}<p class="mensaje warning">No hay cuentas con el rol Técnico. {% if rol == "administrador" %}<a href="{% url 'usuarios:nueva' %}">Crea una en Usuarios</a>.{% endif %}</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

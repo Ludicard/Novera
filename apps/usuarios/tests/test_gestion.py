@@ -123,11 +123,11 @@ class GestionUsuariosTests(TestCase):
     def test_solo_el_rol_administrador_gestiona_usuarios(self):
         tec = User.objects.create_user("tec", password=CLAVE)
         entrar_como(self.client, tec, TECNICO)
-        self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("dashboard"))
-        self.assertNotContains(self.client.get(reverse("dashboard")), reverse("usuarios:lista"))
+        self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("inicio"), fetch_redirect_response=False)
+        self.assertNotContains(self.client.get(reverse("inicio")), reverse("usuarios:lista"))
         # Un Administrador que eligió trabajar como Técnico tampoco
         entrar_como(self.client, self.admin, TECNICO, roles=[ADMINISTRADOR])
-        self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("dashboard"))
+        self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("inicio"), fetch_redirect_response=False)
 
     def test_lista_y_busqueda(self):
         r = self.client.get(reverse("usuarios:lista") + "?q=jef")
@@ -159,11 +159,11 @@ class ManagerTecnicoSinAdminTests(TestCase):
     def test_sin_enlaces_ni_acceso_de_administracion(self):
         for rol in (MANAGER, TECNICO):
             self.client.post(reverse("usuarios:elegir_rol"), {"rol": rol})
-            r = self.client.get(reverse("dashboard"))
+            r = self.client.get(reverse("inicio"))
             self.assertNotContains(r, "Admin avanzado")
             self.assertNotContains(r, "Usuarios y accesos")
             self.assertNotContains(r, 'href="/admin/')
-            self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("dashboard"))
+            self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("inicio"), fetch_redirect_response=False)
             self.assertEqual(self.client.get("/admin/").status_code, 302)  # al login del admin: no es staff
 
     def test_alta_desde_novera_guarda_exactamente_esos_roles(self):

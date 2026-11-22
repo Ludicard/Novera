@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load novera trabajos %}
+{% block title %}Proformas{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'trabajos:ordenes' %}">← Órdenes de trabajo</a>
+<div class="encabezado">
+  <div><h1>Proformas</h1><span class="tenue">Cotizaciones al cliente. Al aprobarse, generan la orden de trabajo.</span></div>
+  <a class="boton primario" href="{% url 'trabajos:proforma_nueva' %}">+ Nueva proforma</a>
+</div>
+<nav class="pestanas">
+  {% for clave, nombre, n in pestanas %}
+  <a class="pestana {% if clave == estado %}activa{% endif %}" href="?estado={{ clave }}{% if q %}&q={{ q|urlencode }}{% endif %}"><span>{{ nombre }}</span><b>{{ n }}</b></a>
+  {% endfor %}
+</nav>
+<form method="get" class="tarjeta barra-busqueda">
+  <input type="hidden" name="estado" value="{{ estado }}">
+  <div class="busqueda"><span class="lupa" aria-hidden="true">⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Buscar por número, trabajo o cliente…"></div>
+  <button class="boton">Buscar</button>
+</form>
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista">
+  <thead><tr><th>Proforma</th><th>Cliente</th><th>Trabajo</th><th class="ocultar-movil">Fecha</th><th class="num">Total</th><th>Estado</th></tr></thead>
+  <tbody>
+  {% for p in pagina %}
+    <tr>
+      <td><a class="numero" href="{{ p.get_absolute_url }}">{{ p.numero }}</a></td>
+      <td>{{ p.cliente }}</td>
+      <td class="recorte" title="{{ p.titulo }}">{{ p.titulo }}</td>
+      <td class="ocultar-movil">{{ p.fecha|date:"d/m/Y" }}</td>
+      <td class="num">{{ p.total|dinero }}</td>
+      <td>{% insignia p %}{% if p.orden %} <a href="{{ p.orden.get_absolute_url }}" class="tenue">{{ p.orden.numero }}</a>{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="vacio-tabla"><strong>No hay proformas{% if estado or q %} con estos filtros{% endif %}.</strong><a href="{% url 'trabajos:proforma_nueva' %}">Crea la primera</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% include "_paginacion.html" %}
+{% endblock %}

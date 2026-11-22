@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% if orden %}{{ orden.get_absolute_url }}{% else %}{% url 'trabajos:ordenes' %}{% endif %}">← Volver</a>
+<div class="encabezado"><div><h1>{{ titulo }}</h1>{% if orden.proforma %}<span class="tenue">Desde la proforma {{ orden.proforma.numero }}</span>{% endif %}</div></div>
+<form method="post" class="formulario">
+  {% csrf_token %}
+  <section class="tarjeta">
+    <h2>Trabajo</h2>
+    <div class="campos campos-doc">{% include "_campos.html" %}</div>
+  </section>
+  <section class="tarjeta">
+    <h2>Materiales y herramientas</h2>
+    <p class="tenue">Lo que hay que llevar o comprar para la orden.</p>
+    {% include "trabajos/_formset.html" with fs=recursos %}
+  </section>
+  <div class="acciones"><button class="boton primario">Guardar orden</button>
+    <a href="{% if orden %}{{ orden.get_absolute_url }}{% else %}{% url 'trabajos:ordenes' %}{% endif %}">Cancelar</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/formset.js' %}"></script>{% endblock %}

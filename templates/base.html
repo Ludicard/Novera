@@ -9,20 +9,26 @@
 <body>
 {% block barra %}{% if user.is_authenticated %}
 <header class="topbar">
-  <a class="marca" href="{% url 'dashboard' %}">Novera</a>
+  <a class="marca" href="{% url 'inicio' %}">Novera</a>
   {% if rol %}
-  <nav>
+  <nav class="nav-principal">
     {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
-    <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Inicio</a>
-    <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' and u != 'importar' %}class="activo"{% endif %}>Facturas</a>
+    <a href="{% url 'inicio' %}" {% if u == 'inicio' %}class="activo"{% endif %}>Inicio</a>
+    {% if rol == "tecnico" %}
+    <a href="{% url 'trabajos:mis_tareas' %}" {% if u == 'mis_tareas' %}class="activo"{% endif %}>Mis tareas</a>
+    <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' and u != 'mis_tareas' %}class="activo"{% endif %}>Órdenes</a>
+    {% else %}
+    <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' %}class="activo"{% endif %}>Órdenes</a>
     <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
-    <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar</a>
+    <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' or u == 'finanzas' %}class="activo"{% endif %}>Facturas</a>
+    <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Panel</a>
     {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}" {% if ns == 'usuarios' and u != 'elegir_rol' %}class="activo"{% endif %}>Usuarios</a>{% endif %}
+    {% endif %}
     {% endwith %}
   </nav>
   {% else %}<span class="espaciador"></span>{% endif %}
   <div class="usuario">
-    {% if rol %}<a class="boton primario solo-escritorio" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>{% endif %}
+    {% if rol == "administrador" or rol == "manager" %}<a class="boton primario solo-escritorio" href="{% url 'trabajos:orden_nueva' %}">+ Orden de trabajo</a>{% endif %}
     <details class="menu-usuario">
       <summary class="rol-actual {{ rol }}" aria-label="Menú de la cuenta">
         {% if rol %}<span class="rol-mini">{% include "usuarios/_icono_rol.html" with clave=rol %}</span>{% endif %}
@@ -40,6 +46,21 @@
     </details>
   </div>
 </header>
+{% if rol %}
+<nav class="nav-inferior" aria-label="Navegación principal">
+  {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
+  <a href="{% url 'inicio' %}" {% if u == 'inicio' %}class="activo"{% endif %}><span aria-hidden="true">⌂</span>Inicio</a>
+  {% if rol == "tecnico" %}
+  <a href="{% url 'trabajos:mis_tareas' %}" {% if u == 'mis_tareas' %}class="activo"{% endif %}><span aria-hidden="true">✓</span>Mis tareas</a>
+  <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' and u != 'mis_tareas' %}class="activo"{% endif %}><span aria-hidden="true">☰</span>Órdenes</a>
+  {% else %}
+  <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}><span aria-hidden="true">▥</span>Reportes</a>
+  <a href="{% url 'trabajos:asignar' %}" {% if u == 'asignar' %}class="activo"{% endif %}><span aria-hidden="true">⚒</span>Tareas</a>
+  <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' or u == 'finanzas' %}class="activo"{% endif %}><span aria-hidden="true">$</span>Facturas</a>
+  {% endif %}
+  {% endwith %}
+</nav>
+{% endif %}
 {% endif %}{% endblock %}
 <main class="contenedor">
   {% for m in messages %}<div class="mensaje {{ m.tags }}">{{ m }}</div>{% endfor %}

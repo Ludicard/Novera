@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.clientes",
     "apps.facturas",
     "apps.usuarios",
+    "apps.trabajos",
 ]
 
 MIDDLEWARE = [
@@ -119,7 +120,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTHENTICATION_BACKENDS = ["apps.usuarios.backends.UsuarioSinMayusculasBackend"]
 
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "dashboard"
+LOGIN_REDIRECT_URL = "inicio"
 LOGOUT_REDIRECT_URL = "login"
 
 # Detrás de Caddy (HTTPS terminado en el proxy)
