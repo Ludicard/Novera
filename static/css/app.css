@@ -21,6 +21,12 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 .marca { font-weight: 700; font-size: 1.2rem; letter-spacing: .02em; opacity: 1 !important; }
 .usuario { display: flex; align-items: center; gap: 1rem; }
 .usuario form { margin: 0; }
+.espaciador { flex: 1; }
+.rol-actual { font-size: .9rem; opacity: .95; }
+.rol-actual b { background: rgba(255,255,255,.18); border-radius: 99px; padding: .1rem .55rem; font-weight: 600; }
+.selector-rol label { display: flex; align-items: center; gap: .4rem; font-size: .9rem; }
+.selector-rol select { width: auto; padding: .25rem 1.6rem .25rem .6rem; border-radius: 99px; border: 1px solid rgba(255,255,255,.35); background-color: rgba(255,255,255,.15); color: #fff; font-weight: 600; }
+.selector-rol select option { color: var(--texto); }
 .usuario .enlace { color: #fff; opacity: .85; }
 .topbar .boton.primario { background: #fff; color: var(--primario); }
 

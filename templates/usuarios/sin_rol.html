@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Sin rol asignado{% endblock %}
+{% block content %}
+<div class="tarjeta vacio">
+  <h2>Tu cuenta aún no tiene un rol</h2>
+  <p>Para usar Novera, un Administrador debe asignarte uno: Administrador, Manager o Técnico.</p>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="boton">Salir</button></form>
+</div>
+{% endblock %}

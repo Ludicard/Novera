@@ -11,12 +11,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.clientes.models import Cliente
+from apps.usuarios.roles import asignar_rol
 from apps.facturas.models import Factura, Pago
 
 
 class VistasTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
+        asignar_rol(self.user, "manager")
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(nombre="Edificio Central", dias_credito=15)
 
@@ -135,6 +137,7 @@ class PanelTests(TestCase):
     def setUp(self):
         from datetime import date
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
+        asignar_rol(self.user, "manager")
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(nombre="Edificio Central")
         self.hoy = date(2025, 6, 15)
@@ -188,6 +191,7 @@ class ListadoTests(TestCase):
     def setUp(self):
         from datetime import date
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
+        asignar_rol(self.user, "manager")
         self.client.force_login(self.user)
         self.cliente = Cliente.objects.create(nombre="Edificio Central")
         hoy = timezone.localdate()

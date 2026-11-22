@@ -10,6 +10,7 @@
 {% if user.is_authenticated %}
 <header class="topbar">
   <a class="marca" href="{% url 'dashboard' %}">Novera</a>
+  {% if rol %}
   <nav>
     {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
     <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Inicio</a>
@@ -18,8 +19,23 @@
     <a href="{% url 'facturas:importar' %}" {% if u == 'importar' %}class="activo"{% endif %}>Importar</a>
     {% endwith %}
   </nav>
+  {% else %}<span class="espaciador"></span>{% endif %}
   <div class="usuario">
-    <a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>
+    {% if rol_asignado == "administrador" %}
+    <form method="post" action="{% url 'usuarios:cambiar_rol' %}" class="selector-rol" title="Elige con qué rol usar Novera">
+      {% csrf_token %}
+      <input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+      <label><span>{{ user.get_short_name|default:user.username }} ·</span>
+        <select name="rol" onchange="this.form.submit()" aria-label="Rol activo">
+          {% for clave, nombre in roles_elegibles %}<option value="{{ clave }}" {% if clave == rol %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+        </select>
+      </label>
+      <noscript><button class="boton chico">Cambiar</button></noscript>
+    </form>
+    {% elif rol %}
+    <span class="rol-actual">{{ user.get_short_name|default:user.username }} · <b>{{ rol_nombre }}</b></span>
+    {% endif %}
+    {% if rol %}<a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>{% endif %}
     {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="enlace">Salir</button></form>
   </div>
