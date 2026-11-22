@@ -22,11 +22,36 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 .usuario { display: flex; align-items: center; gap: 1rem; }
 .usuario form { margin: 0; }
 .espaciador { flex: 1; }
-.rol-actual { font-size: .9rem; opacity: .95; }
-.rol-actual b { background: rgba(255,255,255,.18); border-radius: 99px; padding: .1rem .55rem; font-weight: 600; }
-.selector-rol label { display: flex; align-items: center; gap: .4rem; font-size: .9rem; }
-.selector-rol select { width: auto; padding: .25rem 1.6rem .25rem .6rem; border-radius: 99px; border: 1px solid rgba(255,255,255,.35); background-color: rgba(255,255,255,.15); color: #fff; font-weight: 600; }
-.selector-rol select option { color: var(--texto); }
+.rol-actual { display: inline-flex; align-items: center; gap: .5rem; font-size: .9rem; opacity: 1 !important; padding: .2rem .7rem .2rem .25rem; border-radius: 99px; background: rgba(255,255,255,.1); }
+.rol-actual:hover { background: rgba(255,255,255,.2); }
+.rol-actual b { font-weight: 600; }
+.rol-actual i { font-style: normal; opacity: .7; }
+.rol-mini { width: 1.75rem; height: 1.75rem; border-radius: 99px; display: grid; place-items: center; background: #fff; }
+.rol-mini svg { width: 1.2rem; height: 1.2rem; }
+
+/* --- Selección de rol */
+.manager { --rol: #1e5fa8; --rol-claro: #e6effa; }
+.administrador { --rol: #1a7f4b; --rol-claro: #e3f4ea; }
+.tecnico { --rol: #c2560c; --rol-claro: #fdeee2; }
+.rol-mini svg { color: var(--rol); }
+.eleccion-rol { max-width: 430px; margin: 6vh auto 2rem; text-align: center; }
+.marca-grande { display: inline-flex; align-items: center; gap: .7rem; font-size: 1.9rem; font-weight: 700; color: var(--primario); letter-spacing: .01em; }
+.marca-grande svg { width: 3rem; height: 3rem; }
+.saludo { color: var(--tenue); margin: 1.4rem 0 .2rem; }
+.eleccion-rol h1 { justify-content: center; font-size: 1.45rem; margin-bottom: 1.4rem; }
+.roles { display: flex; flex-direction: column; gap: .9rem; }
+.rol-opcion { display: flex; align-items: center; gap: 1.1rem; width: 100%; padding: 1rem 1.1rem; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; font: inherit; color: var(--texto); text-align: left; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+.rol-opcion:hover, .rol-opcion:focus-visible { border-color: var(--rol); box-shadow: 0 6px 18px rgba(16,24,40,.08); transform: translateY(-1px); outline: none; }
+.rol-opcion:active { transform: translateY(0); }
+.rol-icono { flex: 0 0 auto; width: 4.2rem; height: 4.2rem; border-radius: 50%; display: grid; place-items: center; background: var(--rol-claro); color: var(--rol); }
+.rol-icono svg { width: 2.7rem; height: 2.7rem; }
+.rol-texto { flex: 1; display: flex; flex-direction: column; gap: .15rem; }
+.rol-texto strong { font-size: 1.2rem; }
+.rol-texto small { color: var(--tenue); font-size: .85rem; }
+.rol-flecha { font-size: 1.8rem; color: var(--tenue); line-height: 1; }
+.rol-opcion:hover .rol-flecha { color: var(--rol); }
+.ayuda { color: var(--tenue); font-size: .88rem; margin: 1.6rem 0 .4rem; }
+.ayuda span { color: var(--primario); }
 .usuario .enlace { color: #fff; opacity: .85; }
 .topbar .boton.primario { background: #fff; color: var(--primario); }
 

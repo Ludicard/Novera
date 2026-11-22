@@ -1,23 +1,37 @@
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
 
-from .roles import ADMINISTRADOR, ROLES, SESION_ROL, roles_disponibles
+from .roles import DESCRIPCIONES, ROLES, SESION_ROL
+
+
+def _siguiente(request):
+    url = request.POST.get("siguiente") or request.GET.get("siguiente") or ""
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return url
+    return ""
 
 
 @login_required
-@require_POST
-def cambiar_rol(request):
-    """El Administrador elige con qué rol trabaja en esta sesión."""
-    volver = request.POST.get("siguiente", "")
-    if not url_has_allowed_host_and_scheme(volver, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
-        volver = "dashboard"
-    clave = request.POST.get("rol")
-    if request.rol_asignado != ADMINISTRADOR or clave not in roles_disponibles(ADMINISTRADOR):
-        messages.error(request, "Tu cuenta no puede cambiar de rol.")
-        return redirect(volver)
-    request.session[SESION_ROL] = clave
-    messages.info(request, f"Ahora estás usando Novera como {ROLES[clave]}.")
-    return redirect(volver)
+def elegir_rol(request):
+    """Pantalla de selección de rol: aparece en cada inicio de sesión, aunque la cuenta tenga un solo rol."""
+    disponibles = request.roles
+    if not disponibles:
+        return render(request, "usuarios/sin_rol.html", status=403)
+    error = ""
+    if request.method == "POST":
+        clave = request.POST.get("rol")
+        if clave in disponibles:
+            request.session[SESION_ROL] = clave
+            return redirect(_siguiente(request) or "dashboard")
+        error = "Ese rol no está disponible para tu cuenta."
+    return render(
+        request,
+        "usuarios/elegir_rol.html",
+        {
+            "opciones": [{"clave": c, "nombre": ROLES[c], "descripcion": DESCRIPCIONES[c]} for c in disponibles],
+            "siguiente": _siguiente(request),
+            "error": error,
+        },
+        status=400 if error else 200,
+    )

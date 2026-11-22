@@ -1,22 +1,27 @@
-"""Roles de Novera: Administrador, Manager y Técnico.
+"""Roles de Novera: Manager, Administrador y Técnico.
 
-Cada rol es un grupo de Django (así luego se le pueden colgar permisos). Toda cuenta tiene un rol;
-el Administrador puede además elegir con cuál de los tres trabaja en la sesión («ver como»).
+Cada rol es un grupo de Django (así luego se le pueden colgar permisos). Una cuenta tiene acceso a uno o
+varios roles; quien tiene Administrador puede usar los tres. Al iniciar sesión siempre se elige con qué rol
+se trabaja (pantalla de selección), y ese rol activo vive en la sesión.
 """
 
 from django.contrib.auth.models import Group
 
-ADMINISTRADOR = "administrador"
 MANAGER = "manager"
+ADMINISTRADOR = "administrador"
 TECNICO = "tecnico"
 
-# clave -> nombre del grupo (en orden de prioridad si alguien tuviera varios)
+# clave -> nombre del grupo, en el orden en que se muestran
 ROLES = {
-    ADMINISTRADOR: "Administrador",
     MANAGER: "Manager",
+    ADMINISTRADOR: "Administrador",
     TECNICO: "Técnico",
 }
-CLAVE_POR_GRUPO = {nombre: clave for clave, nombre in ROLES.items()}
+DESCRIPCIONES = {
+    MANAGER: "Seguimiento de cobros, clientes e indicadores",
+    ADMINISTRADOR: "Control total: facturas, usuarios e importaciones",
+    TECNICO: "Trabajo de campo y servicios asignados",
+}
 SESION_ROL = "rol_activo"
 
 
@@ -25,30 +30,37 @@ def asegurar_roles():
         Group.objects.get_or_create(name=nombre)
 
 
-def rol_de(usuario):
-    """Rol asignado a la cuenta (clave) o None. Un superusuario sin rol pasa a ser Administrador."""
+def roles_de(usuario):
+    """Roles asignados a la cuenta (claves, en orden). Un superusuario sin roles pasa a ser Administrador."""
     if not usuario.is_authenticated:
-        return None
+        return []
     nombres = set(usuario.groups.filter(name__in=ROLES.values()).values_list("name", flat=True))
-    for clave, nombre in ROLES.items():
-        if nombre in nombres:
-            return clave
-    if usuario.is_superuser:
-        asignar_rol(usuario, ADMINISTRADOR)
-        return ADMINISTRADOR
-    return None
+    roles = [clave for clave, nombre in ROLES.items() if nombre in nombres]
+    if not roles and usuario.is_superuser:
+        asignar_roles(usuario, [ADMINISTRADOR])
+        roles = [ADMINISTRADOR]
+    return roles
 
 
-def asignar_rol(usuario, clave):
-    """Deja a la cuenta con un único rol."""
+def roles_disponibles(asignados):
+    """Roles con los que la cuenta puede entrar: Administrador da acceso a los tres."""
+    if ADMINISTRADOR in asignados:
+        return list(ROLES)
+    return [clave for clave in ROLES if clave in asignados]
+
+
+def asignar_roles(usuario, claves):
+    """Deja a la cuenta exactamente con esos roles."""
     asegurar_roles()
     grupos = {g.name: g for g in Group.objects.filter(name__in=ROLES.values())}
-    usuario.groups.remove(*[g for n, g in grupos.items() if n != ROLES[clave]])
-    usuario.groups.add(grupos[ROLES[clave]])
+    quiero = {ROLES[c] for c in claves}
+    usuario.groups.remove(*[g for n, g in grupos.items() if n not in quiero])
+    usuario.groups.add(*[grupos[n] for n in quiero])
 
 
-def roles_disponibles(rol_asignado):
-    """Roles que la cuenta puede usar: el Administrador puede elegir entre los tres."""
-    if rol_asignado == ADMINISTRADOR:
-        return list(ROLES)
-    return [rol_asignado] if rol_asignado else []
+def agregar_rol(usuario, clave):
+    asignar_roles(usuario, set(roles_de(usuario)) | {clave})
+
+
+def quitar_rol(usuario, clave):
+    asignar_roles(usuario, set(roles_de(usuario)) - {clave})

@@ -1,12 +1,11 @@
-from .roles import ROLES, roles_disponibles
+from .roles import ROLES
 
 
 def rol(request):
-    asignado = getattr(request, "rol_asignado", None)
+    roles = getattr(request, "roles", [])
     actual = getattr(request, "rol", None)
     return {
         "rol": actual,
         "rol_nombre": ROLES.get(actual, ""),
-        "rol_asignado": asignado,
-        "roles_elegibles": [(c, ROLES[c]) for c in roles_disponibles(asignado)],
+        "puede_cambiar_rol": len(roles) > 1,
     }

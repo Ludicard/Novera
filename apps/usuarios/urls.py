@@ -5,5 +5,5 @@ from . import views
 app_name = "usuarios"
 
 urlpatterns = [
-    path("rol/", views.cambiar_rol, name="cambiar_rol"),
+    path("rol/", views.elegir_rol, name="elegir_rol"),
 ]

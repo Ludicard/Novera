@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Selecciona tu rol{% endblock %}
+{% block barra %}{% endblock %}
+{% block content %}
+<div class="eleccion-rol">
+  <div class="marca-grande">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="2" y="2" width="44" height="44" rx="12" fill="var(--primario)"/>
+      <path d="M15 34V14l18 20V14" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Novera</span>
+  </div>
+  <p class="saludo">Hola, {{ user.get_short_name|default:user.username }}</p>
+  <h1>Selecciona tu rol</h1>
+  {% if error %}<div class="mensaje error">{{ error }}</div>{% endif %}
+
+  <form method="post" class="roles">
+    {% csrf_token %}
+    {% if siguiente %}<input type="hidden" name="siguiente" value="{{ siguiente }}">{% endif %}
+    {% for o in opciones %}
+    <button class="rol-opcion {{ o.clave }}" name="rol" value="{{ o.clave }}" {% if forloop.first %}autofocus{% endif %}>
+      <span class="rol-icono">{% include "usuarios/_icono_rol.html" with clave=o.clave %}</span>
+      <span class="rol-texto"><strong>{{ o.nombre }}</strong><small>{{ o.descripcion }}</small></span>
+      <span class="rol-flecha" aria-hidden="true">›</span>
+    </button>
+    {% endfor %}
+  </form>
+
+  <p class="ayuda">¿Necesitas otro rol? <span>Pídeselo a un Administrador.</span></p>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="enlace">Cerrar sesión</button></form>
+</div>
+{% endblock %}

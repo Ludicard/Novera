@@ -8,6 +8,7 @@ class UsuariosConfig(AppConfig):
     verbose_name = "Usuarios y roles"
 
     def ready(self):
+        from . import signals  # noqa: F401
         from .roles import asegurar_roles
 
         # Los roles existen siempre que la app arranca con la base migrada (también tras un flush)
