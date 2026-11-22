@@ -114,3 +114,39 @@ class GestionUsuariosTests(TestCase):
         su = User.objects.create_superuser("root", "r@x.test", CLAVE)
         entrar_como(self.client, su, ADMINISTRADOR)
         self.assertContains(self.client.get(reverse("dashboard")), "Admin avanzado")
+
+
+class ManagerTecnicoSinAdminTests(TestCase):
+    """Una cuenta con acceso solo a Manager y Técnico no ve ni puede usar nada de administración."""
+
+    def setUp(self):
+        self.u = User.objects.create_user("p2", password=CLAVE)
+        asignar_roles(self.u, [MANAGER, TECNICO])
+        self.client.force_login(self.u)
+
+    def test_selector_sin_administrador(self):
+        r = self.client.get(reverse("usuarios:elegir_rol"))
+        self.assertEqual([o["clave"] for o in r.context["opciones"]], [MANAGER, TECNICO])
+        self.assertNotContains(r, 'value="administrador"')
+        self.assertEqual(self.client.post(reverse("usuarios:elegir_rol"), {"rol": ADMINISTRADOR}).status_code, 400)
+
+    def test_sin_enlaces_ni_acceso_de_administracion(self):
+        for rol in (MANAGER, TECNICO):
+            self.client.post(reverse("usuarios:elegir_rol"), {"rol": rol})
+            r = self.client.get(reverse("dashboard"))
+            self.assertNotContains(r, "Admin avanzado")
+            self.assertNotContains(r, "Usuarios y accesos")
+            self.assertNotContains(r, 'href="/admin/')
+            self.assertRedirects(self.client.get(reverse("usuarios:lista")), reverse("dashboard"))
+            self.assertEqual(self.client.get("/admin/").status_code, 302)  # al login del admin: no es staff
+
+    def test_alta_desde_novera_guarda_exactamente_esos_roles(self):
+        admin = User.objects.create_user("jefa", password=CLAVE, first_name="Jefa")
+        entrar_como(self.client, admin, ADMINISTRADOR)
+        self.client.post(reverse("usuarios:nueva"), {
+            "first_name": "P", "username": "p3", "roles": [MANAGER, TECNICO],
+            "password1": "Clave-Segura-987", "password2": "Clave-Segura-987",
+        })
+        nuevo = User.objects.get(username="p3")
+        self.assertEqual(roles_de(nuevo), [MANAGER, TECNICO])
+        self.assertFalse(nuevo.is_staff or nuevo.is_superuser)
