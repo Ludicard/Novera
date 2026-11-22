@@ -1,4 +1,6 @@
+import re
 import uuid
+from datetime import date, timedelta
 from urllib.parse import urlparse
 from decimal import Decimal
 from pathlib import Path
@@ -56,13 +58,95 @@ ORDEN_DEFECTO = "-emision"
 TAMANOS_PAGINA = [25, 50, 100]
 
 
-def _filtrar(get, con_estado=True):
-    """Devuelve (form, queryset). Con `con_estado=False` ignora el filtro de estado (para las pestañas)."""
+# ---------------------------------------------------------------- periodo del listado
+
+MESES_NOMBRES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+                 "octubre", "noviembre", "diciembre"]
+PERIODOS_RAPIDOS = [
+    ("mes", "Este mes"),
+    ("mes_anterior", "Mes anterior"),
+    ("3m", "Últimos 3 meses"),
+    ("anio", "Este año"),
+    ("anio_anterior", "Año anterior"),
+    ("todo", "Todo"),
+]
+# En estas pestañas lo importante es lo pendiente de cualquier mes: por defecto muestran todo el historial
+ESTADOS_DE_COBRO = {"ABIERTAS", Estado.VENCIDA, Estado.PARCIAL, Estado.PENDIENTE}
+PATRON_MES = re.compile(r"^(\d{4})-(\d{2})$")
+
+
+def _mover_mes(d, n):
+    total = d.year * 12 + d.month - 1 + n
+    return date(total // 12, total % 12 + 1, 1)
+
+
+def _fin_de_mes(d):
+    return _mover_mes(d, 1) - timedelta(days=1)
+
+
+def _nombre_mes(d):
+    return f"{MESES_NOMBRES[d.month - 1].capitalize()} {d.year}"
+
+
+def periodo_del_listado(get, estado, hoy=None):
+    """Periodo de emisión que se aplica al listado.
+
+    Devuelve dict con clave (la opción activa), desde/hasta (None = sin límite), etiqueta y, si es un mes
+    concreto, el mes y los meses anterior/siguiente para navegar.
+    """
+    hoy = hoy or timezone.localdate()
+    este_mes = hoy.replace(day=1)
+    if get.get("emitida_desde") or get.get("emitida_hasta"):
+        return {"clave": "rango", "desde": None, "hasta": None, "etiqueta": "Rango personalizado", "mes": None}
+    # Sin periodo elegido: este mes, salvo en pestañas de cobro o al buscar (se busca en todo el historial)
+    buscando = bool((get.get("q") or "").strip())
+    clave = get.get("periodo") or ("todo" if estado in ESTADOS_DE_COBRO or buscando else "mes")
+    mes = None
+    m = PATRON_MES.match(clave)
+    if m and 1 <= int(m.group(2)) <= 12:
+        mes = date(int(m.group(1)), int(m.group(2)), 1)
+    elif clave == "mes":
+        mes = este_mes
+    elif clave == "mes_anterior":
+        mes = _mover_mes(este_mes, -1)
+    if mes:
+        clave = "mes" if mes == este_mes else "mes_anterior" if mes == _mover_mes(este_mes, -1) else f"{mes:%Y-%m}"
+        return {
+            "clave": clave, "desde": mes, "hasta": _fin_de_mes(mes), "etiqueta": _nombre_mes(mes), "mes": mes,
+            "anterior": f"{_mover_mes(mes, -1):%Y-%m}",
+            "siguiente": f"{_mover_mes(mes, 1):%Y-%m}" if mes < este_mes else None,
+            "anterior_nombre": _nombre_mes(_mover_mes(mes, -1)),
+            "siguiente_nombre": _nombre_mes(_mover_mes(mes, 1)),
+        }
+    if clave == "3m":
+        desde = _mover_mes(este_mes, -2)
+        return {"clave": clave, "desde": desde, "hasta": None, "mes": None,
+                "etiqueta": f"Últimos 3 meses ({MESES_NOMBRES[desde.month - 1][:3]} – {MESES_NOMBRES[hoy.month - 1][:3]} {hoy.year})"}
+    if clave == "anio":
+        return {"clave": clave, "desde": date(hoy.year, 1, 1), "hasta": date(hoy.year, 12, 31), "etiqueta": str(hoy.year), "mes": None}
+    if clave == "anio_anterior":
+        return {"clave": clave, "desde": date(hoy.year - 1, 1, 1), "hasta": date(hoy.year - 1, 12, 31),
+                "etiqueta": str(hoy.year - 1), "mes": None}
+    return {"clave": "todo", "desde": None, "hasta": None, "etiqueta": "Todo el historial", "mes": None}
+
+
+def _filtrar(get, con_estado=True, estado_periodo=None):
+    """Devuelve (form, queryset). Con `con_estado=False` ignora el filtro de estado (para las pestañas).
+
+    `estado_periodo` decide el periodo por defecto (si no se eligió uno): sirve para contar cada pestaña
+    con el periodo que tendría al abrirla.
+    """
     form = FiltroFacturasForm(get or None)
     qs = Factura.objects.con_saldos().select_related("cliente")
+    form.is_valid()  # un campo inválido (p. ej. ?desde=2025-13) no anula el resto de filtros
+    d = {campo: getattr(form, "cleaned_data", {}).get(campo) for campo in form.fields}
+    estado = d.get("estado") or ""
+    periodo = periodo_del_listado(get, estado if estado_periodo is None else estado_periodo)
+    if periodo["desde"]:
+        qs = qs.filter(fecha_emision__gte=periodo["desde"])
+    if periodo["hasta"]:
+        qs = qs.filter(fecha_emision__lte=periodo["hasta"])
     if form.is_bound:
-        form.is_valid()  # un campo inválido (p. ej. ?desde=2025-13) no anula el resto de filtros
-        d = {campo: form.cleaned_data.get(campo) for campo in form.fields}
         if d["q"]:
             q = d["q"].strip()
             filtro = Q(numero__icontains=q) | Q(objeto__icontains=q) | Q(cliente__nombre__icontains=q)
@@ -130,8 +214,14 @@ def _filtros_activos(form, get):
 @login_required
 def lista(request):
     hoy = timezone.localdate()
-    form, base = _filtrar(request.GET, con_estado=False)
+    form, base_mes = _filtrar(request.GET, con_estado=False, estado_periodo="")
+    _, base_cobro = _filtrar(request.GET, con_estado=False, estado_periodo="ABIERTAS")
     _, qs = _filtrar(request.GET)
+    estado_actual = getattr(form, "cleaned_data", {}).get("estado") or ""
+    periodo = periodo_del_listado(request.GET, estado_actual, hoy)
+    # Cada pestaña se cuenta con el periodo que tendrá al abrirla
+    pestanas_mes, pestanas_cobro = _conteos_por_pestana(base_mes), _conteos_por_pestana(base_cobro)
+    pestanas = [c if c["clave"] in ESTADOS_DE_COBRO else m for m, c in zip(pestanas_mes, pestanas_cobro)]
     totales = qs.filter(anulada=False).aggregate(
         suma_total=Sum("total"), suma_saldo=Sum("saldo", filter=Q(saldo__gt=0)), suma_pagado=Sum("pagado")
     )
@@ -166,8 +256,11 @@ def lista(request):
             "rango_paginas": pagina.paginator.get_elided_page_range(pagina.number, on_each_side=2, on_ends=1),
             "totales": totales,
             "filtros": filtros.urlencode(),
-            "pestanas": _conteos_por_pestana(base),
-            "estado_actual": d.get("estado", ""),
+            "pestanas": pestanas,
+            "estado_actual": estado_actual,
+            "periodo": periodo,
+            "periodos": PERIODOS_RAPIDOS,
+            "periodo_elegido": request.GET.get("periodo", ""),
             "chips": _filtros_activos(form, request.GET),
             "mas_filtros_abiertos": any(d.get(c) for c in ("cliente", "desde", "hasta", "emitida_desde", "emitida_hasta")),
             "orden": orden,

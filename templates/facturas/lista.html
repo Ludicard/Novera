@@ -4,7 +4,7 @@
 <div class="encabezado">
   <div>
     <h1>Facturas</h1>
-    <span class="tenue">{{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}{% if estado_actual or chips or form.q.value %} con los filtros actuales{% endif %}</span>
+    <span class="tenue">{{ periodo.etiqueta }} · {{ pagina.paginator.count }} documento{{ pagina.paginator.count|pluralize }}{% if chips or form.q.value %} con los filtros actuales{% endif %}</span>
   </div>
   <div class="acciones-encabezado">
     <a class="boton" href="{% url 'facturas:exportar' %}?{{ filtros }}" title="Descarga lo que ves en pantalla">⤓ Exportar</a>
@@ -12,6 +12,23 @@
     <a class="boton primario" href="{% url 'facturas:nueva' %}">+ Nueva factura</a>
   </div>
 </div>
+
+<div class="barra-periodo">
+  <nav class="segmentos" aria-label="Periodo de emisión">
+    {% for clave, nombre in periodos %}
+    <a href="{% url_con periodo=clave emitida_desde=None emitida_hasta=None %}" class="{% if clave == periodo.clave %}activo{% endif %}" {% if clave == periodo.clave %}aria-current="true"{% endif %}>{{ nombre }}</a>
+    {% endfor %}
+    {% if periodo.clave == "rango" %}<span class="activo">Rango personalizado</span>{% endif %}
+  </nav>
+  {% if periodo.mes %}
+  <div class="navegar-mes">
+    <a href="{% url_con periodo=periodo.anterior %}" title="{{ periodo.anterior_nombre }}" aria-label="Mes anterior: {{ periodo.anterior_nombre }}">‹</a>
+    <strong>{{ periodo.etiqueta }}</strong>
+    {% if periodo.siguiente %}<a href="{% url_con periodo=periodo.siguiente %}" title="{{ periodo.siguiente_nombre }}" aria-label="Mes siguiente: {{ periodo.siguiente_nombre }}">›</a>{% else %}<span class="deshabilitado" aria-hidden="true">›</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% if not periodo_elegido and periodo.clave == "todo" %}{% if form.q.value %}<p class="tenue nota-periodo">La búsqueda abarca todo el historial. Elige un periodo arriba para acotarla.</p>{% elif estado_actual %}<p class="tenue nota-periodo">En esta pestaña se ve todo el historial: lo pendiente de cualquier mes. Elige un periodo arriba para acotarlo.</p>{% endif %}{% endif %}
 
 <nav class="pestanas" aria-label="Filtrar por estado">
   {% for p in pestanas %}
@@ -25,6 +42,7 @@
 
 <form method="get" class="tarjeta barra-busqueda" id="filtros-facturas">
   {% if estado_actual %}<input type="hidden" name="estado" value="{{ estado_actual }}">{% endif %}
+  {% if periodo_elegido %}<input type="hidden" name="periodo" value="{{ periodo_elegido }}">{% endif %}
   {% if orden != "-emision" %}<input type="hidden" name="orden" value="{{ orden }}">{% endif %}
   {% if por_pagina != 50 %}<input type="hidden" name="por_pagina" value="{{ por_pagina }}">{% endif %}
   <div class="busqueda">
@@ -116,8 +134,9 @@
     </tr>
   {% empty %}
     <tr><td colspan="9" class="vacio-tabla">
-      <strong>No hay facturas{% if estado_actual or chips or form.q.value %} con estos filtros{% endif %}.</strong>
-      {% if estado_actual or chips or form.q.value %}<a href="{% url 'facturas:lista' %}">Ver todas</a>{% else %}<a href="{% url 'facturas:importar' %}">Importa el reporte de FactureroMovil</a> o <a href="{% url 'facturas:nueva' %}">registra una factura</a>.{% endif %}
+      <strong>No hay facturas{% if periodo.clave != "todo" %} en {{ periodo.etiqueta|lower }}{% endif %}{% if estado_actual or chips or form.q.value %} con estos filtros{% endif %}.</strong>
+      {% if periodo.clave != "todo" %}<a href="{% url_con periodo='todo' emitida_desde=None emitida_hasta=None %}">Buscar en todo el historial</a>
+      {% elif estado_actual or chips or form.q.value %}<a href="{% url 'facturas:lista' %}">Ver todas</a>{% else %}<a href="{% url 'facturas:importar' %}">Importa el reporte de FactureroMovil</a> o <a href="{% url 'facturas:nueva' %}">registra una factura</a>.{% endif %}
     </td></tr>
   {% endfor %}
   </tbody>

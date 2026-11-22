@@ -295,6 +295,17 @@ dl.montos .saldo { font-size: 1.4rem; font-weight: 700; color: var(--primario); 
 .verde { color: var(--verde); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
+.barra-periodo { display: flex; justify-content: space-between; align-items: center; gap: .8rem 1.2rem; flex-wrap: wrap; margin-bottom: .8rem; }
+.segmentos { display: inline-flex; flex-wrap: wrap; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: .2rem; gap: .15rem; }
+.segmentos a, .segmentos span { padding: .38rem .75rem; border-radius: 8px; font-size: .88rem; color: var(--texto); text-decoration: none; white-space: nowrap; }
+.segmentos a:hover { background: var(--fondo); }
+.segmentos .activo { background: var(--primario); color: #fff; font-weight: 600; }
+.navegar-mes { display: inline-flex; align-items: center; gap: .3rem; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: .2rem; }
+.navegar-mes strong { min-width: 9.5rem; text-align: center; font-size: .95rem; }
+.navegar-mes a, .navegar-mes .deshabilitado { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border-radius: 8px; text-decoration: none; font-size: 1.3rem; line-height: 1; }
+.navegar-mes a:hover { background: var(--primario-claro); }
+.navegar-mes .deshabilitado { color: var(--borde); }
+.nota-periodo { margin: -.3rem 0 .8rem; font-size: .85rem; }
 .pestanas { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .2rem; margin-bottom: 1rem; scrollbar-width: thin; }
 .pestana { flex: 0 0 auto; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 0 .5rem; padding: .55rem .9rem; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--tarjeta); color: var(--texto); text-decoration: none; min-width: 7.5rem; }
 .pestana span { font-size: .88rem; }
@@ -420,6 +431,9 @@ h3 .enlace { font-size: .85rem; font-weight: 400; margin-left: .5rem; }
   .mosaico-texto strong { font-size: 1rem; }
   .mosaico-texto small { display: none; }
   .roles-tarjetas { grid-template-columns: 1fr; }
+  .segmentos { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  .barra-periodo { flex-direction: column; align-items: stretch; }
+  .navegar-mes { justify-content: space-between; }
   .topbar { gap: .5rem .9rem; }
   .topbar nav { order: 3; flex-basis: 100%; overflow-x: auto; gap: 1rem; padding-bottom: .1rem; }
   .topbar nav a { white-space: nowrap; }

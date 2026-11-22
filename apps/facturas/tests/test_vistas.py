@@ -205,7 +205,7 @@ class ListadoTests(TestCase):
         self.url = reverse("facturas:lista")
 
     def test_pestanas_y_conteos(self):
-        r = self.client.get(self.url)
+        r = self.client.get(self.url + "?periodo=todo")
         conteos = {p["clave"]: p["n"] for p in r.context["pestanas"]}
         self.assertEqual(conteos[""], 3)
         self.assertEqual(conteos["ABIERTAS"], 2)
@@ -215,11 +215,11 @@ class ListadoTests(TestCase):
         self.assertEqual([f.pk for f in r.context["pagina"]], [self.vencida.pk])
 
     def test_orden_y_busqueda(self):
-        r = self.client.get(self.url + "?orden=-total")
+        r = self.client.get(self.url + "?periodo=todo&orden=-total")
         self.assertEqual([f.pk for f in r.context["pagina"]], [self.al_dia.pk, self.vencida.pk, self.pagada.pk])
         r = self.client.get(self.url + "?orden=no-existe")
         self.assertEqual(r.status_code, 200)
-        r = self.client.get(self.url + "?q=676")
+        r = self.client.get(self.url + "?periodo=todo&q=676")
         self.assertEqual([f.pk for f in r.context["pagina"]], [self.vencida.pk])
 
     def test_cobro_rapido_vuelve_al_listado(self):
@@ -357,3 +357,79 @@ class CorreccionesRevisionTests(TestCase):
     def test_filtro_invalido_no_anula_los_demas(self):
         r = self.client.get(reverse("facturas:lista") + "?estado=VENCIDA&desde=2025-13")
         self.assertEqual(r.context["pagina"].paginator.count, 1)
+
+
+
+class PeriodoListadoTests(TestCase):
+    """El listado arranca en el mes actual; las pestañas de cobro muestran todo lo pendiente."""
+
+    def setUp(self):
+        from datetime import date
+
+        from apps.facturas.views import _mover_mes
+        user = User.objects.create_user("usuario", password="clave-segura-123")
+        entrar_como(self.client, user, "manager")
+        cliente = Cliente.objects.create(nombre="Edificio Central")
+        hoy = timezone.localdate()
+        self.este_mes = hoy.replace(day=1)
+        self.mes_anterior = _mover_mes(self.este_mes, -1)
+        self.hace_un_anio = _mover_mes(self.este_mes, -12)
+
+        def factura(n, emision, dias=30):
+            return Factura.objects.create(
+                numero=f"001-001-{n:09d}", cliente=cliente, periodo=emision, fecha_emision=emision, dias_credito=dias,
+                subtotal=Decimal("100"), porcentaje_iva=0, iva=0, total=Decimal("100"),
+            )
+        self.actual = factura(1, self.este_mes)
+        self.anterior = factura(2, self.mes_anterior)
+        self.vieja = factura(3, self.hace_un_anio)  # vencida hace casi un año
+        self.url = reverse("facturas:lista")
+
+    def numeros(self, query=""):
+        r = self.client.get(self.url + query)
+        return sorted(f.numero[-1] for f in r.context["pagina"]), r
+
+    def test_por_defecto_este_mes(self):
+        nums, r = self.numeros()
+        self.assertEqual(nums, ["1"])
+        self.assertEqual(r.context["periodo"]["clave"], "mes")
+
+    def test_navegar_meses(self):
+        nums, r = self.numeros(f"?periodo={self.mes_anterior:%Y-%m}")
+        self.assertEqual(nums, ["2"])
+        self.assertEqual(r.context["periodo"]["clave"], "mes_anterior")
+        self.assertEqual(r.context["periodo"]["siguiente"], f"{self.este_mes:%Y-%m}")
+        _, r = self.numeros()
+        self.assertIsNone(r.context["periodo"]["siguiente"])  # no se navega al futuro
+
+    def test_vencidas_muestra_todo_el_historial(self):
+        nums, r = self.numeros("?estado=VENCIDA")
+        self.assertIn("3", nums)
+        conteos = {p["clave"]: p["n"] for p in r.context["pestanas"]}
+        self.assertEqual(conteos[""], 1)          # «Todas»: este mes
+        self.assertGreaterEqual(conteos["VENCIDA"], 1)  # vencidas: de cualquier mes
+        # Si se elige un periodo, se respeta también en la pestaña de vencidas
+        nums, _ = self.numeros("?estado=VENCIDA&periodo=mes")
+        self.assertNotIn("3", nums)
+
+    def test_periodos_rapidos_y_todo(self):
+        self.assertEqual(self.numeros("?periodo=todo")[0], ["1", "2", "3"])
+        self.assertEqual(self.numeros("?periodo=3m")[0], ["1", "2"])
+        self.assertEqual(self.numeros("?periodo=inventado")[0], ["1", "2", "3"])  # desconocido → todo
+
+    def test_rango_explicito_manda_sobre_el_periodo(self):
+        nums, r = self.numeros(f"?periodo=mes&emitida_desde={self.hace_un_anio:%Y-%m-%d}&emitida_hasta={self.hace_un_anio:%Y-%m-%d}")
+        self.assertEqual(nums, ["3"])
+        self.assertEqual(r.context["periodo"]["clave"], "rango")
+
+    def test_buscar_sin_periodo_busca_en_todo_el_historial(self):
+        self.assertEqual(self.numeros("?q=000000003")[0], ["3"])
+
+    def test_exportar_respeta_el_periodo(self):
+        r = self.client.get(reverse("facturas:exportar") + "?periodo=mes")
+        wb = openpyxl.load_workbook(BytesIO(r.content))
+        self.assertEqual(wb.active.max_row, 2)
+
+    def test_sin_facturas_en_el_mes_ofrece_todo_el_historial(self):
+        r = self.client.get(self.url + "?periodo=2001-01")
+        self.assertContains(r, "Buscar en todo el historial")
