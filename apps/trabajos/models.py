@@ -67,7 +67,8 @@ class FormaPago(models.Model):
 
 class Proforma(Auditoria):
     """Flujo: se solicita autorización → el Manager la autoriza (o la devuelve con observaciones) →
-    se envía al cliente → el cliente la aprueba (genera la orden de trabajo) o la rechaza."""
+    se envía al cliente → el Manager la «procesa» (el cliente la aceptó) → se genera la orden de trabajo.
+    En cualquier momento tras enviarla puede marcarse como rechazada por el cliente."""
 
     class Estado(models.TextChoices):
         BORRADOR = "BORRADOR", "Borrador"  # solo proformas antiguas
@@ -75,7 +76,8 @@ class Proforma(Auditoria):
         DEVUELTA = "DEVUELTA", "Devuelta para corregir"
         AUTORIZADA = "AUTORIZADA", "Autorizada"
         ENVIADA = "ENVIADA", "Enviada al cliente"
-        APROBADA = "APROBADA", "Aprobada por el cliente"
+        PROCESADA = "PROCESADA", "Procesada · lista para orden"
+        APROBADA = "APROBADA", "Con orden de trabajo"
         RECHAZADA = "RECHAZADA", "Rechazada por el cliente"
 
     numero = models.CharField("Número", max_length=20, unique=True, editable=False)
@@ -92,6 +94,10 @@ class Proforma(Auditoria):
     )
     fecha_autorizacion = models.DateTimeField(null=True, blank=True)
     observacion_autorizacion = models.TextField("Observaciones del Manager", blank=True)
+    procesada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    fecha_procesada = models.DateTimeField(null=True, blank=True)
     forma_pago = models.CharField("Forma de pago", max_length=200, blank=True)
     garantia_cantidad = models.PositiveSmallIntegerField("Garantía", null=True, blank=True)
     garantia_unidad = models.CharField(max_length=6, choices=UnidadTiempo.choices, default=UnidadTiempo.MESES, blank=True)
@@ -149,7 +155,14 @@ class Proforma(Auditoria):
 
     @property
     def autorizada(self):
-        return self.estado in (self.Estado.AUTORIZADA, self.Estado.ENVIADA, self.Estado.APROBADA, self.Estado.RECHAZADA)
+        return self.estado in (
+            self.Estado.AUTORIZADA, self.Estado.ENVIADA, self.Estado.PROCESADA, self.Estado.APROBADA, self.Estado.RECHAZADA,
+        )
+
+    @property
+    def lista_para_orden(self):
+        """Procesada por el Manager y todavía sin orden de trabajo."""
+        return self.estado == self.Estado.PROCESADA and not hasattr(self, "orden")
 
     def resumen_desde_lineas(self):
         """El «trabajo a realizar» ya no se escribe aparte: se toma de la primera línea del detalle."""

@@ -17,6 +17,8 @@ ABIERTAS = [OrdenTrabajo.Estado.PENDIENTE, OrdenTrabajo.Estado.EN_CURSO]
 
 
 def _plural(n, palabra, sufijo="s"):
+    if n != 1 and " " in palabra:  # «proforma lista» → «proformas listas»
+        return f"{n} " + " ".join(p + sufijo for p in palabra.split())
     return f"{n} {palabra}{sufijo if n != 1 else ''}"
 
 
@@ -36,17 +38,22 @@ def _mosaicos(request):
     sin_tecnico = abiertas.filter(tecnicos__isnull=True).count()
     por_autorizar = Proforma.objects.filter(estado__in=[Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.BORRADOR]).count()
     devueltas = Proforma.objects.filter(estado=Proforma.Estado.DEVUELTA).count()
+    por_procesar = Proforma.objects.filter(estado=Proforma.Estado.ENVIADA).count()
+    listas = Proforma.objects.filter(estado=Proforma.Estado.PROCESADA, orden__isnull=True).count()
     if request.rol == MANAGER:
-        alerta_pf = f"{por_autorizar} por autorizar" if por_autorizar else ""
-        dato_pf = "Autorizar cotizaciones antes de enviarlas"
+        avisos = [f"{por_autorizar} por autorizar" if por_autorizar else "", f"{por_procesar} por procesar" if por_procesar else ""]
+        alerta_pf = " · ".join(a for a in avisos if a)
+        dato_pf = "Autorizar y procesar cotizaciones"
     else:
         alerta_pf = _plural(devueltas, "devuelta") if devueltas else ""
         dato_pf = "Cotizaciones: crear y enviar a autorizar"
     proformas = {"icono": "proforma", "titulo": "Administrar proformas", "url": reverse("trabajos:proformas"),
                  "color": "verde", "dato": dato_pf, "alerta": alerta_pf}
-    ordenes = {"icono": "orden", "titulo": "Administrar órdenes de trabajo", "url": reverse("trabajos:ordenes"),
+    avisos_ot = [_plural(listas, "proforma lista") if listas else "", f"{sin_tecnico} sin técnico" if sin_tecnico else ""]
+    ordenes = {"icono": "orden", "titulo": "Administrar órdenes de trabajo",
+               "url": reverse("trabajos:orden_nueva") if listas else reverse("trabajos:ordenes"),
                "color": "azul", "dato": _plural(abiertas.count(), "abierta"),
-               "alerta": f"{sin_tecnico} sin técnico" if sin_tecnico else ""}
+               "alerta": " · ".join(a for a in avisos_ot if a)}
 
     if request.rol == MANAGER:
         from apps.clientes.views import conteos_directorio

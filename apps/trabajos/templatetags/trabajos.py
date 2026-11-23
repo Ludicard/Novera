@@ -7,7 +7,7 @@ CLASES = {
     "PENDIENTE": "pendiente", "EN_CURSO": "parcial", "TERMINADA": "pagada", "CANCELADA": "anulada", "HECHA": "pagada",
     # proformas
     "BORRADOR": "anulada", "POR_AUTORIZAR": "parcial", "DEVUELTA": "vencida", "AUTORIZADA": "pendiente",
-    "ENVIADA": "pendiente", "APROBADA": "pagada", "RECHAZADA": "vencida",
+    "ENVIADA": "pendiente", "PROCESADA": "pagada", "APROBADA": "pagada", "RECHAZADA": "vencida",
 }
 
 

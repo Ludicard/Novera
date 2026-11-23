@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.forms import inlineformset_factory
 
@@ -139,11 +140,18 @@ class OrdenForm(ClientesActivosMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        asignados = self.instance.tecnicos.all() if self.instance.pk else get_user_model().objects.none()
-        self.fields["tecnicos"].queryset = (tecnicos() | asignados).distinct().order_by("first_name", "username")
+        # Técnicos activos, más los ya asignados a esta orden aunque hoy estén deshabilitados
+        asignados = list(self.instance.tecnicos.values_list("pk", flat=True)) if self.instance.pk else []
+        self.fields["tecnicos"].queryset = (
+            get_user_model().objects
+            .filter(Q(is_active=True, groups__name=ROLES[TECNICO]) | Q(pk__in=asignados))
+            .distinct().order_by("first_name", "username")
+        )
         self.fields["tecnicos"].help_text = "Cuentas con el rol Técnico. Verán esta orden y podrán generar informes."
-        en_uso = self.instance.equipos.all() if self.instance.pk else Equipo.objects.none()
-        self.fields["equipos"].queryset = (Equipo.objects.filter(activo=True) | en_uso).distinct().select_related("cliente")
+        en_uso = list(self.instance.equipos.values_list("pk", flat=True)) if self.instance.pk else []
+        self.fields["equipos"].queryset = (
+            Equipo.objects.filter(Q(activo=True) | Q(pk__in=en_uso)).select_related("cliente").order_by("cliente__nombre", "nombre")
+        )
         self.fields["equipos"].help_text = "Solo se muestran los del cliente elegido."
 
     def clean(self):

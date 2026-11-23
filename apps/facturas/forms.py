@@ -84,10 +84,11 @@ class FacturaForm(forms.ModelForm):
         self.fields["numero"].required = False
         from apps.trabajos.models import OrdenTrabajo
 
-        en_uso = self.instance.ordenes.all() if self.instance.pk else OrdenTrabajo.objects.none()
+        en_uso = list(self.instance.ordenes.values_list("pk", flat=True)) if self.instance.pk else []
         self.fields["ordenes"].queryset = (
-            OrdenTrabajo.objects.exclude(estado=OrdenTrabajo.Estado.CANCELADA) | en_uso
-        ).distinct().select_related("cliente").order_by("-creado")
+            OrdenTrabajo.objects.filter(~Q(estado=OrdenTrabajo.Estado.CANCELADA) | Q(pk__in=en_uso))
+            .select_related("cliente").order_by("-creado")
+        )
         self.fields["numero"].widget.attrs.update({
             "data-siguiente-factura": siguiente_numero(), "data-siguiente-recibo": siguiente_recibo(),
         })

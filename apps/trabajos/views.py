@@ -37,7 +37,7 @@ def proformas(request):
     if q:
         qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q))
     orden_estados = [Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.DEVUELTA, Proforma.Estado.AUTORIZADA,
-                     Proforma.Estado.ENVIADA, Proforma.Estado.APROBADA, Proforma.Estado.RECHAZADA]
+                     Proforma.Estado.ENVIADA, Proforma.Estado.PROCESADA, Proforma.Estado.APROBADA, Proforma.Estado.RECHAZADA]
     pestanas = [("", "Todas", sum(conteos.values()))] + [
         (c, Proforma.Estado(c).label, conteos.get(c, 0)) for c in orden_estados
     ]
@@ -113,7 +113,7 @@ def proforma(request, pk):
 @requiere_rol(*GESTION)
 @require_POST
 def proforma_estado(request, pk):
-    """Autorizar o devolver (Manager); enviar, aprobada/rechazada por el cliente (al aprobar se genera la orden)."""
+    """Autorizar, devolver y procesar (Manager); enviar, generar la orden de trabajo y rechazada por el cliente."""
     p = get_object_or_404(Proforma, pk=pk)
     accion = request.POST.get("accion")
     observacion = request.POST.get("observacion", "").strip()
@@ -122,13 +122,17 @@ def proforma_estado(request, pk):
         "autorizar": ({E.POR_AUTORIZAR, E.BORRADOR, E.DEVUELTA}, E.AUTORIZADA),
         "devolver": ({E.POR_AUTORIZAR, E.BORRADOR, E.AUTORIZADA, E.ENVIADA}, E.DEVUELTA),
         "enviar": ({E.AUTORIZADA}, E.ENVIADA),
-        "aprobar": ({E.AUTORIZADA, E.ENVIADA}, E.APROBADA),
-        "rechazar": ({E.AUTORIZADA, E.ENVIADA}, E.RECHAZADA),
+        "procesar": ({E.ENVIADA}, E.PROCESADA),
+        "generar_orden": ({E.PROCESADA}, E.APROBADA),
+        "rechazar": ({E.AUTORIZADA, E.ENVIADA, E.PROCESADA}, E.RECHAZADA),
         "reabrir": ({E.RECHAZADA}, E.POR_AUTORIZAR),
     }
-    if accion in ("autorizar", "devolver") and request.rol != MANAGER:
-        messages.error(request, "Solo el Manager puede autorizar o devolver proformas.")
+    if accion in ("autorizar", "devolver", "procesar") and request.rol != MANAGER:
+        messages.error(request, "Solo el Manager puede autorizar, devolver o procesar proformas.")
         return redirect(p)
+    if accion == "generar_orden" and getattr(p, "orden", None):
+        messages.info(request, f"Esta proforma ya tiene la orden {p.orden.numero}.")
+        return redirect(p.orden)
     if accion not in transiciones or p.estado not in transiciones[accion][0]:
         messages.error(request, "Esa acción no es posible en el estado actual de la proforma.")
         return redirect(p)
@@ -143,18 +147,22 @@ def proforma_estado(request, pk):
             p.fecha_autorizacion = timezone.now() if accion == "autorizar" else None
             p.observacion_autorizacion = observacion
             campos += ["autorizada_por", "fecha_autorizacion", "observacion_autorizacion"]
-        if accion in ("aprobar", "rechazar"):
+        if accion == "procesar":
+            p.procesada_por, p.fecha_procesada = request.user, timezone.now()
+            campos += ["procesada_por", "fecha_procesada"]
+        if accion in ("procesar", "rechazar"):
             p.fecha_respuesta = timezone.localdate()
             campos.append("fecha_respuesta")
         p.save(update_fields=campos)
-        if accion == "aprobar":
+        if accion == "generar_orden":
             orden = OrdenTrabajo.desde_proforma(p, request.user)
-            messages.success(request, f"Aprobada por el cliente: se generó la orden {orden.numero}. Completa fechas, técnicos y herramientas.")
+            messages.success(request, f"Se generó la orden {orden.numero} a partir de {p.numero}. Completa fechas, técnicos y herramientas.")
             return redirect("trabajos:orden_editar", pk=orden.pk)
     textos = {
         "autorizar": f"Proforma {p.numero} autorizada: ya se puede enviar al cliente.",
         "devolver": f"Proforma {p.numero} devuelta para corregir.",
         "enviar": f"Proforma {p.numero} marcada como enviada al cliente.",
+        "procesar": f"Proforma {p.numero} procesada: ya se puede generar la orden de trabajo.",
         "rechazar": f"Proforma {p.numero} marcada como rechazada por el cliente.",
         "reabrir": f"Proforma {p.numero} reabierta: vuelve a autorización.",
     }
@@ -253,6 +261,10 @@ def ordenes(request):
     })
 
 
+def _proformas_listas():
+    return Proforma.objects.filter(estado=Proforma.Estado.PROCESADA, orden__isnull=True).select_related("cliente").order_by("fecha_procesada")
+
+
 def _guardar_orden(request, orden=None):
     form = OrdenForm(request.POST or None, instance=orden, initial=None if orden else _cliente_inicial(request))
     recursos = RecursosFormSet(request.POST or None, instance=form.instance, prefix="recursos")
@@ -268,7 +280,10 @@ def _guardar_orden(request, orden=None):
         messages.success(request, f"Orden {o.numero} guardada.")
         return redirect(o)
     titulo = f"Editar {orden.numero}" if orden else "Nueva orden de trabajo"
-    return render(request, "trabajos/orden_form.html", {"form": form, "recursos": recursos, "titulo": titulo, "orden": orden})
+    return render(request, "trabajos/orden_form.html", {
+        "form": form, "recursos": recursos, "titulo": titulo, "orden": orden,
+        "proformas_listas": _proformas_listas() if not orden else None,
+    })
 
 
 @requiere_rol(*GESTION)

@@ -10,12 +10,17 @@
     <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}">⤓ Descargar PDF</a>
     {% endif %}
     {% if p.editable %}<a class="boton" href="{% url 'trabajos:proforma_editar' p.pk %}">{% if p.estado == "DEVUELTA" %}Corregir{% else %}Editar{% endif %}</a>{% endif %}
-    {% if p.autorizada and p.estado != "APROBADA" and p.estado != "RECHAZADA" %}
+    {% if p.estado == "AUTORIZADA" or p.estado == "ENVIADA" or p.estado == "PROCESADA" %}
     <form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">
       {% csrf_token %}
       {% if p.estado == "AUTORIZADA" %}<button class="boton" name="accion" value="enviar">Marcar como enviada</button>{% endif %}
-      <button class="boton texto-rojo" name="accion" value="rechazar" onclick="return confirm('¿El cliente rechazó la proforma?')">Rechazada</button>
-      <button class="boton primario" name="accion" value="aprobar" onclick="return confirm('¿El cliente aprobó la proforma? Se generará la orden de trabajo.')">✓ Aprobada por el cliente</button>
+      {% if p.estado == "ENVIADA" and rol == "manager" %}
+      <button class="boton primario" name="accion" value="procesar" onclick="return confirm('¿Procesar la proforma? Quedará lista para generar la orden de trabajo.')">⚙ Procesar</button>
+      {% endif %}
+      {% if p.estado == "PROCESADA" %}
+      <button class="boton primario" name="accion" value="generar_orden">+ Generar orden de trabajo</button>
+      {% endif %}
+      <button class="boton texto-rojo" name="accion" value="rechazar" onclick="return confirm('¿El cliente rechazó la proforma?')">Rechazada por el cliente</button>
     </form>
     {% endif %}
     {% if p.estado == "RECHAZADA" %}<form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">{% csrf_token %}<button class="boton" name="accion" value="reabrir">Reabrir</button></form>{% endif %}
@@ -42,7 +47,12 @@
   {% endif %}
 {% elif p.estado == "DEVUELTA" %}
   <div class="mensaje warning"><strong>Devuelta por el Manager:</strong> {{ p.observacion_autorizacion }} — corrígela y vuelve a solicitar la autorización.</div>
-{% elif p.autorizada_por %}
+{% elif p.estado == "ENVIADA" and rol != "manager" %}
+  <div class="mensaje">📨 Enviada al cliente. Cuando el cliente la acepte, el Manager la procesará para poder generar la orden de trabajo.</div>
+{% elif p.estado == "PROCESADA" %}
+  <div class="mensaje success">✓ Procesada por {{ p.procesada_por.get_full_name|default:p.procesada_por.username }} el {{ p.fecha_procesada|date:"d/m/Y H:i" }}: ya se puede <strong>generar la orden de trabajo</strong>.</div>
+{% endif %}
+{% if p.autorizada_por and p.estado != "POR_AUTORIZAR" and p.estado != "DEVUELTA" and p.estado != "BORRADOR" %}
   <p class="tenue">🔒 Autorizada por {{ p.autorizada_por.get_full_name|default:p.autorizada_por.username }} el {{ p.fecha_autorizacion|date:"d/m/Y H:i" }}{% if p.observacion_autorizacion %} · «{{ p.observacion_autorizacion }}»{% endif %}. Ya no se puede editar.</p>
   {% if rol == "manager" and p.estado == "AUTORIZADA" or rol == "manager" and p.estado == "ENVIADA" %}
   <details class="no-imprimir"><summary class="enlace">Devolver para corregir</summary>

@@ -66,8 +66,9 @@ class ProformasYOrdenesTests(Base):
         p = self.crear_proforma()
         self.assertEqual((p.numero, p.subtotal, p.total, p.estado), ("PF-00001", Decimal("335.00"), Decimal("385.25"), "POR_AUTORIZAR"))
         self.assertEqual(p.titulo, "Cambio de cables del ascensor y 1 ítem más")  # resumen tomado del detalle
-        # Sin autorizar no se puede aprobar ni enviar
-        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "aprobar"})
+        # Sin autorizar no se puede enviar ni generar la orden
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "enviar"})
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "generar_orden"})
         self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "autorizar"})  # el admin no autoriza
         p.refresh_from_db()
         self.assertEqual(p.estado, "POR_AUTORIZAR")
@@ -76,8 +77,25 @@ class ProformasYOrdenesTests(Base):
         p.refresh_from_db()
         self.assertEqual((p.estado, p.autorizada_por.username), ("AUTORIZADA", "mana"))
         self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "enviar"})
-        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "aprobar"})
+        # Solo el Manager procesa; sin procesar no se genera la orden
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "procesar"})
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "generar_orden"})
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "ENVIADA")
+        self.assertFalse(OrdenTrabajo.objects.exists())
+        self.autorizar_como_manager(p, "procesar")
+        p.refresh_from_db()
+        self.assertEqual((p.estado, p.procesada_por.username), ("PROCESADA", "mana"))
+        # Aparece en «Nueva orden de trabajo» y se genera desde ahí (o desde la proforma)
+        self.assertEqual(list(self.client.get(reverse("trabajos:orden_nueva")).context["proformas_listas"]), [p])
+        r = self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "generar_orden"})
         orden = OrdenTrabajo.objects.get()
+        self.assertRedirects(r, reverse("trabajos:orden_editar", args=[orden.pk]))
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "APROBADA")
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "generar_orden"})
+        self.assertEqual(OrdenTrabajo.objects.count(), 1)  # no se duplica
+        self.assertEqual(list(self.client.get(reverse("trabajos:orden_nueva")).context["proformas_listas"]), [])
         self.assertEqual((orden.numero, orden.proforma, orden.ubicacion), ("OT-00001", p, "Av. Siempre Viva 123"))
         self.assertEqual(list(orden.recursos.values_list("descripcion", flat=True)), ["Cable de acero 10 mm"])
 
@@ -145,6 +163,26 @@ class ProformasYOrdenesTests(Base):
         self.assertEqual(orden.recursos.get().tipo, Recurso.Tipo.HERRAMIENTA)
         self.assertContains(self.client.get(equipo.get_absolute_url()), orden.numero)  # historial del equipo
 
+    def test_editar_orden_existente_con_tecnicos_y_equipos(self):
+        equipo = Equipo.objects.create(cliente=self.cliente, nombre="Ascensor 1")
+        o = OrdenTrabajo.objects.create(cliente=self.cliente, titulo="Revisión")
+        o.tecnicos.add(self.tec)
+        o.equipos.add(equipo)
+        # Aunque el técnico y el equipo ya no estén activos, la orden se sigue pudiendo editar
+        self.tec.is_active = False
+        self.tec.save()
+        equipo.activo = False
+        equipo.save()
+        r = self.client.get(reverse("trabajos:orden_editar", args=[o.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(self.tec, r.context["form"].fields["tecnicos"].queryset)
+        self.assertIn(equipo, r.context["form"].fields["equipos"].queryset)
+        r = self.client.post(reverse("trabajos:orden_editar", args=[o.pk]),
+                             datos_orden(self.cliente, titulo="Revisión anual", tecnicos=[self.tec.pk], equipos=[equipo.pk]))
+        self.assertRedirects(r, o.get_absolute_url())
+        o.refresh_from_db()
+        self.assertEqual((o.titulo, list(o.tecnicos.all())), ("Revisión anual", [self.tec]))
+
     def test_equipo_de_otro_cliente_no_se_acepta(self):
         otro = Cliente.objects.create(nombre="Torre Norte")
         ajeno = Equipo.objects.create(cliente=otro, nombre="Montacargas")
@@ -171,6 +209,17 @@ class ProformasYOrdenesTests(Base):
         ajena = OrdenTrabajo.objects.create(cliente=otro, titulo="Ajena")
         r = self.client.post(reverse("facturas:nueva"), {**base, "tipo": "FACTURA", "numero": "", "ordenes": [ajena.pk]})
         self.assertContains(r, "es de otro cliente")
+
+    def test_editar_factura_con_orden_cancelada(self):
+        o = OrdenTrabajo.objects.create(cliente=self.cliente, titulo="Uno")
+        hoy = timezone.localdate()
+        f = Factura.objects.create(numero="REC-00009", tipo="RECIBO", cliente=self.cliente, periodo=hoy, fecha_emision=hoy,
+                                   subtotal=10, total=10)
+        f.ordenes.add(o)
+        o.estado = OrdenTrabajo.Estado.CANCELADA
+        o.save()
+        r = self.client.get(reverse("facturas:editar", args=[f.pk]))
+        self.assertIn(o, r.context["form"].fields["ordenes"].queryset)
 
     def test_facturar_desde_la_orden_precarga_datos(self):
         o = OrdenTrabajo.objects.create(cliente=self.cliente, titulo="Reparación")
