@@ -161,7 +161,4 @@ NOVERA_EMPRESA = {
 }
 # Logo de respaldo para los PDF si no se subió uno en Configuración: static/img/logo-empresa.png
 NOVERA_LOGO = "img/logo-empresa.png"
-# Subidas: límite de tamaño de lo que se carga en memoria (el logo se valida aparte a 2 MB)
-FILE_UPLOAD_PERMISSIONS = 0o640
-FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
 
