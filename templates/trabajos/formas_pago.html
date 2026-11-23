@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Formas de pago{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'trabajos:proformas' %}">← Proformas</a>
+<div class="encabezado"><div><h1>Formas de pago</h1><span class="tenue">Opciones que se ofrecen al hacer una proforma</span></div></div>
+<div class="rejilla panel">
+  <section class="tarjeta sin-relleno desplazable">
+    <table class="lista">
+      <thead><tr><th class="num">Orden</th><th>Forma de pago</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in formas %}
+        <tr class="{% if not f.activa %}inactiva{% endif %}{% if editando.pk == f.pk %} seleccionada{% endif %}">
+          <td class="num">{{ f.orden }}</td>
+          <td><strong>{{ f.nombre }}</strong></td>
+          <td>{% if f.activa %}<span class="estado pagada">Activa</span>{% else %}<span class="estado anulada">Inactiva</span>{% endif %}</td>
+          <td class="acciones-col nowrap">
+            <a class="boton chico" href="{% url 'trabajos:forma_pago_editar' f.pk %}">Editar</a>
+            <form method="post" action="{% url 'trabajos:forma_pago_activar' f.pk %}" class="en-linea">{% csrf_token %}
+              <button class="boton chico {% if f.activa %}texto-rojo{% endif %}">{% if f.activa %}Desactivar{% else %}Activar{% endif %}</button></form>
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="4" class="vacio-tabla">No hay formas de pago.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <form method="post" class="tarjeta formulario" action="{% if editando %}{% url 'trabajos:forma_pago_editar' editando.pk %}{% else %}{% url 'trabajos:formas_pago' %}{% endif %}">
+    {% csrf_token %}
+    <h2>{% if editando %}Editar «{{ editando.nombre }}»{% else %}Agregar forma de pago{% endif %}</h2>
+    <div class="campos">
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.nombre %}</div>
+      {% include "usuarios/_campo.html" with campo=form.orden %}
+      <div class="campo"><label class="interruptor-campo">{{ form.activa }} Activa</label><small>{{ form.activa.help_text }}</small></div>
+    </div>
+    <div class="acciones"><button class="boton primario">{% if editando %}Guardar cambios{% else %}Agregar{% endif %}</button>
+      {% if editando %}<a href="{% url 'trabajos:formas_pago' %}">Cancelar</a>{% endif %}</div>
+    <p class="tenue">Desactivar una forma de pago no cambia las proformas que ya la usan.</p>
+  </form>
+</div>
+{% endblock %}

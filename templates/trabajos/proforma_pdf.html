@@ -33,13 +33,13 @@
   .trabajo .tit { font-weight: bold; font-size: 10pt; }
   .detalle { margin-top: 10px; }
   .detalle th { background: #1f4e5f; color: #fff; font-size: 8pt; text-transform: uppercase; padding: 5px 6px; text-align: left; }
+  .detalle th, .detalle td { text-align: left; }
   .detalle td { padding: 5px 6px; border-bottom: 1px solid #dfe4ea; vertical-align: top; }
   .detalle tr:nth-child(even) td { background: #f5f7f9; }
   .num { text-align: right; white-space: nowrap; }
   .pie td { vertical-align: top; }
   .adicional { width: 58%; padding-right: 10px; }
   .adicional p { margin: 0 0 4px; }
-  .adicional .et { color: #52606d; }
   .totales { width: 42%; }
   .totales table td { padding: 4px 8px; border: 1px solid #c9d3db; }
   .totales table td:first-child { color: #3b4652; }
@@ -92,18 +92,13 @@
   </table>
 </div>
 
-<div class="seccion trabajo">
-  <h3>Trabajo cotizado</h3>
-  <p class="tit">{{ p.titulo }}</p>
-  {% if p.descripcion %}<p class="pre">{{ p.descripcion }}</p>{% endif %}
-</div>
 
 <table class="detalle">
-  <thead><tr><th class="num" style="width:12%">Cant.</th><th style="width:9%">Unidad</th><th>Descripción</th><th class="num" style="width:15%">P. unitario</th><th class="num" style="width:15%">Subtotal</th></tr></thead>
+  <thead><tr><th style="width:10%">Cant.</th><th style="width:9%">Unidad</th><th>Descripción</th><th style="width:15%">P. unitario</th><th style="width:15%">Subtotal</th></tr></thead>
   <tbody>
   {% for l in lineas %}
-    <tr><td class="num">{{ l.cantidad|floatformat:"-2" }}</td><td>{{ l.unidad }}</td><td>{{ l.descripcion }}</td>
-      <td class="num">{{ l.precio_unitario|dinero }}</td><td class="num">{{ l.importe|dinero }}</td></tr>
+    <tr><td>{{ l.cantidad|floatformat:"-2" }}</td><td>{{ l.unidad }}</td><td>{{ l.descripcion }}</td>
+      <td>{{ l.precio_unitario|dinero }}</td><td>{{ l.importe|dinero }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -113,10 +108,10 @@
     <td class="adicional">
       <div class="caja">
         <h3>Información adicional</h3>
-        {% if p.forma_pago %}<p><span class="et">Forma de pago:</span> {{ p.forma_pago }}</p>{% endif %}
-        {% if p.garantia %}<p><span class="et">Garantía:</span> <b>{{ p.garantia }}</b></p>
+        {% if p.forma_pago %}<p><b>Forma de pago:</b> {{ p.forma_pago }}</p>{% endif %}
+        {% if p.garantia %}<p><b>Garantía:</b> {{ p.garantia }}</p>
           {% if p.garantia_nota %}<p class="pre tenue">{{ p.garantia_nota }}</p>{% endif %}{% endif %}
-        <p><span class="et">Validez de la oferta:</span> {{ p.validez_dias }} día{{ p.validez_dias|pluralize }} (hasta el {{ p.valida_hasta|date:"d/m/Y" }})</p>
+        <p><b>Validez de la oferta:</b> {{ p.validez_dias }} día{{ p.validez_dias|pluralize }} (hasta el {{ p.valida_hasta|date:"d/m/Y" }})</p>
       </div>
     </td>
     <td class="totales">

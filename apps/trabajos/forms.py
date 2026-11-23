@@ -5,7 +5,7 @@ from django.forms import inlineformset_factory
 from apps.clientes.models import Cliente, Equipo
 from apps.usuarios.roles import ROLES, TECNICO
 
-from .models import Informe, LineaProforma, OrdenTrabajo, Proforma, Recurso
+from .models import FormaPago, Informe, LineaProforma, OrdenTrabajo, Proforma, Recurso
 
 FECHA = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 TASAS_IVA = [("15", "15 %"), ("12", "12 %"), ("5", "5 %"), ("0", "0 %")]
@@ -22,48 +22,60 @@ def tecnicos():
 class ClientesActivosMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["cliente"].widget.attrs["data-buscar"] = "cliente"
         actual = getattr(self.instance, "cliente_id", None)
         self.fields["cliente"].queryset = Cliente.objects.filter(activo=True) | Cliente.objects.filter(pk=actual)
         self.fields["cliente"].empty_label = "Elige un cliente"
 
 
-FORMAS_PAGO_SUGERIDAS = [
-    "Contado",
-    "50 % de anticipo y 50 % contra entrega",
-    "70 % de anticipo y 30 % contra entrega",
-    "Crédito a 30 días",
-    "Transferencia bancaria",
-]
-
-
 class ProformaForm(ClientesActivosMixin, forms.ModelForm):
     porcentaje_iva = forms.TypedChoiceField(label="% IVA", choices=TASAS_IVA, coerce=str, initial="15")
+    forma_pago = forms.ChoiceField(label="Forma de pago", required=False)
 
     class Meta:
         model = Proforma
         fields = [
-            "cliente", "titulo", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
+            "cliente", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
             "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales", "notas",
         ]
         widgets = {
             "fecha": FECHA,
-            "descripcion": forms.Textarea(attrs={"rows": 3}),
-            "forma_pago": forms.TextInput(attrs={"list": "formas-pago", "placeholder": "Ej.: 50 % de anticipo y 50 % contra entrega"}),
+            "cliente": forms.Select(attrs={"data-buscar": "cliente"}),
+            "descripcion": forms.Textarea(attrs={"rows": 2, "placeholder": "Opcional: indicaciones para la orden de trabajo (no sale en el PDF)"}),
             "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
             "garantia_nota": forms.Textarea(attrs={"rows": 2, "placeholder": "Ej.: cubre defectos de instalación y repuestos; no cubre mal uso…"}),
             "condiciones_generales": forms.Textarea(attrs={"rows": 4, "placeholder": "Plazos, alcance, exclusiones, responsabilidades del cliente…"}),
             "notas": forms.Textarea(attrs={"rows": 2}),
         }
-        labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad"}
+        labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad",
+                  "descripcion": "Indicaciones para la orden de trabajo"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        opciones = list(FormaPago.objects.filter(activa=True).values_list("nombre", flat=True))
+        actual = self.instance.forma_pago if self.instance.pk else ""
+        if actual and actual not in opciones:
+            opciones.append(actual)  # una forma de pago ya usada que luego se desactivó
+        self.fields["forma_pago"].choices = [("", "Elige la forma de pago")] + [(o, o) for o in opciones]
         if not self.instance.pk:
             # Para no reescribirlas cada vez: se proponen las de la última proforma
             ultima = Proforma.objects.order_by("-creado").first()
             if ultima:
                 for campo in ("forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales"):
                     self.initial.setdefault(campo, getattr(ultima, campo))
+
+
+class FormaPagoForm(forms.ModelForm):
+    class Meta:
+        model = FormaPago
+        fields = ["nombre", "orden", "activa"]
+        widgets = {"nombre": forms.TextInput(attrs={"placeholder": "Ej.: 60% Anticipo 40% Al terminar"})}
+
+    def clean_nombre(self):
+        nombre = " ".join(self.cleaned_data["nombre"].split())
+        if FormaPago.objects.filter(nombre__iexact=nombre).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("Esa forma de pago ya existe.")
+        return nombre
 
 
 class LineaForm(forms.ModelForm):

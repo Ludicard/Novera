@@ -46,25 +46,91 @@ class ProformasYOrdenesTests(Base):
         entrar_como(self.client, self.admin, ADMINISTRADOR)
 
     def crear_proforma(self):
-        datos = {"cliente": self.cliente.pk, "titulo": "Cambio de cables del ascensor", "fecha": timezone.localdate().isoformat(),
-                 "validez_dias": 15, "porcentaje_iva": "15", "descripcion": "", "notas": ""}
+        datos = {"cliente": self.cliente.pk, "fecha": timezone.localdate().isoformat(), "validez_dias": 15,
+                 "porcentaje_iva": "15", "descripcion": "", "notas": "", "forma_pago": "50% Anticipo 50% Al terminar"}
         datos.update(lineas(
-            {"tipo": "SERVICIO", "descripcion": "Mano de obra", "cantidad": "8", "unidad": "h", "precio_unitario": "25"},
+            {"tipo": "SERVICIO", "descripcion": "Cambio de cables del ascensor", "cantidad": "8", "unidad": "h", "precio_unitario": "25"},
             {"tipo": "MATERIAL", "descripcion": "Cable de acero 10 mm", "cantidad": "30", "unidad": "m", "precio_unitario": "4.5"},
         ))
         r = self.client.post(reverse("trabajos:proforma_nueva"), datos)
-        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.status_code, 302, getattr(r, "context", None) and r.context["form"].errors)
         return Proforma.objects.get()
 
-    def test_proforma_totales_y_aprobacion_genera_orden(self):
+    def autorizar_como_manager(self, p, accion="autorizar", observacion=""):
+        entrar_como(self.client, User.objects.get_or_create(username="mana")[0], MANAGER)
+        r = self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": accion, "observacion": observacion})
+        entrar_como(self.client, self.admin, ADMINISTRADOR)
+        return r
+
+    def test_solicitar_autorizacion_y_aprobacion_genera_orden(self):
         p = self.crear_proforma()
-        self.assertEqual((p.numero, p.subtotal, p.total), ("PF-00001", Decimal("335.00"), Decimal("385.25")))
+        self.assertEqual((p.numero, p.subtotal, p.total, p.estado), ("PF-00001", Decimal("335.00"), Decimal("385.25"), "POR_AUTORIZAR"))
+        self.assertEqual(p.titulo, "Cambio de cables del ascensor y 1 ítem más")  # resumen tomado del detalle
+        # Sin autorizar no se puede aprobar ni enviar
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "aprobar"})
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "autorizar"})  # el admin no autoriza
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "POR_AUTORIZAR")
+        self.assertFalse(OrdenTrabajo.objects.exists())
+        self.autorizar_como_manager(p)
+        p.refresh_from_db()
+        self.assertEqual((p.estado, p.autorizada_por.username), ("AUTORIZADA", "mana"))
+        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "enviar"})
         self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "aprobar"})
         orden = OrdenTrabajo.objects.get()
         self.assertEqual((orden.numero, orden.proforma, orden.ubicacion), ("OT-00001", p, "Av. Siempre Viva 123"))
         self.assertEqual(list(orden.recursos.values_list("descripcion", flat=True)), ["Cable de acero 10 mm"])
-        self.client.post(reverse("trabajos:proforma_estado", args=[p.pk]), {"accion": "aprobar"})
-        self.assertEqual(OrdenTrabajo.objects.count(), 1)
+
+    def test_devolver_y_corregir(self):
+        p = self.crear_proforma()
+        r = self.autorizar_como_manager(p, "devolver")  # sin observación no se devuelve
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "POR_AUTORIZAR")
+        self.autorizar_como_manager(p, "devolver", "Revisar el precio de la mano de obra")
+        p.refresh_from_db()
+        self.assertEqual((p.estado, p.observacion_autorizacion), ("DEVUELTA", "Revisar el precio de la mano de obra"))
+        self.assertContains(self.client.get(p.get_absolute_url()), "Revisar el precio de la mano de obra")
+        # Al corregir y guardar vuelve a pedir autorización
+        datos = {"cliente": self.cliente.pk, "fecha": timezone.localdate().isoformat(), "validez_dias": 15, "porcentaje_iva": "15"}
+        l = p.lineas.order_by("pk")
+        datos.update(lineas(*[{"id": x.pk, "proforma": p.pk, "tipo": x.tipo, "descripcion": x.descripcion, "cantidad": "8",
+                                "unidad": x.unidad, "precio_unitario": "20"} for x in l], iniciales=l.count()))
+        self.client.post(reverse("trabajos:proforma_editar", args=[p.pk]), datos)
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "POR_AUTORIZAR")
+
+    def test_autorizada_no_se_edita_salvo_que_el_manager_la_devuelva(self):
+        p = self.crear_proforma()
+        self.autorizar_como_manager(p)
+        r = self.client.get(reverse("trabajos:proforma_editar", args=[p.pk]))
+        self.assertRedirects(r, p.get_absolute_url())
+        self.assertNotContains(self.client.get(p.get_absolute_url()), reverse("trabajos:proforma_editar", args=[p.pk]))
+        self.autorizar_como_manager(p, "devolver", "Cambiar la garantía")
+        p.refresh_from_db()
+        self.assertEqual(p.estado, "DEVUELTA")
+        self.assertEqual(self.client.get(reverse("trabajos:proforma_editar", args=[p.pk])).status_code, 200)
+
+    def test_manager_crea_y_queda_autorizada(self):
+        entrar_como(self.client, User.objects.create_user("mana2", password=CLAVE), MANAGER)
+        p = self.crear_proforma()
+        self.assertEqual((p.estado, p.autorizada_por.username), ("AUTORIZADA", "mana2"))
+        r = self.client.get(reverse("trabajos:proformas"))
+        self.assertContains(r, "Por autorizar")
+
+    def test_formas_de_pago(self):
+        from apps.trabajos.models import FormaPago
+
+        self.assertEqual(list(FormaPago.objects.filter(activa=True).values_list("nombre", flat=True)), [
+            "100% Contra entrega", "70% Anticipo 30% Al terminar", "50% Anticipo 50% Al terminar", "40% Anticipo 60% Al terminar",
+        ])
+        r = self.client.post(reverse("trabajos:forma_pago_rapida"), {"nombre": "60% Anticipo 40% Al terminar"})
+        self.assertEqual(r.json()["nombre"], "60% Anticipo 40% Al terminar")
+        self.assertEqual(self.client.post(reverse("trabajos:forma_pago_rapida"), {"nombre": "60% anticipo 40% al terminar"}).status_code, 400)
+        fp = FormaPago.objects.get(nombre="100% Contra entrega")
+        self.client.post(reverse("trabajos:forma_pago_activar", args=[fp.pk]))
+        opciones = [v for v, _ in self.client.get(reverse("trabajos:proforma_nueva")).context["form"].fields["forma_pago"].choices]
+        self.assertNotIn("100% Contra entrega", opciones)
+        self.assertIn("60% Anticipo 40% Al terminar", opciones)
 
     def test_orden_con_tecnicos_equipos_y_herramientas(self):
         equipo = Equipo.objects.create(cliente=self.cliente, nombre="Ascensor 1")
@@ -299,10 +365,12 @@ class ProformaPdfTests(Base):
     def setUp(self):
         super().setUp()
         self.p = Proforma.objects.create(
-            cliente=self.cliente, titulo="Cambio de cables", forma_pago="Contado", garantia_cantidad=3,
+            cliente=self.cliente, titulo="Cambio de cables", forma_pago="100% Contra entrega", garantia_cantidad=3,
             garantia_nota="Cubre repuestos", condiciones_generales="1. Precios incluyen IVA.",
         )
         self.p.lineas.create(descripcion="Mano de obra", cantidad=8, unidad="h", precio_unitario=25)
+        self.p.estado = Proforma.Estado.AUTORIZADA
+        self.p.save()
 
     def test_garantia_en_texto(self):
         self.assertEqual(self.p.garantia, "3 meses")
@@ -329,6 +397,18 @@ class ProformaPdfTests(Base):
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]) + "?ver=1")
         self.assertIn("inline", r["Content-Disposition"])
 
+    def test_sin_autorizar_no_hay_pdf(self):
+        entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
+        self.p.estado = Proforma.Estado.POR_AUTORIZAR
+        self.p.save()
+        r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]))
+        self.assertRedirects(r, self.p.get_absolute_url())
+        r = self.client.get(self.p.get_absolute_url())
+        self.assertNotContains(r, reverse("trabajos:proforma_pdf", args=[self.p.pk]))
+        self.p.estado = Proforma.Estado.AUTORIZADA
+        self.p.save()
+        self.assertContains(self.client.get(self.p.get_absolute_url()), "Descargar PDF")
+
     def test_tecnico_no_descarga_proformas(self):
         entrar_como(self.client, self.tec, TECNICO)
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]))
@@ -337,6 +417,6 @@ class ProformaPdfTests(Base):
     def test_nueva_proforma_propone_condiciones_de_la_ultima(self):
         entrar_como(self.client, User.objects.create_user("mana", password=CLAVE), MANAGER)
         form = self.client.get(reverse("trabajos:proforma_nueva")).context["form"]
-        self.assertEqual(form.initial["forma_pago"], "Contado")
+        self.assertEqual(form.initial["forma_pago"], "100% Contra entrega")
         self.assertEqual(form.initial["condiciones_generales"], "1. Precios incluyen IVA.")
         self.assertEqual(form.initial["garantia_cantidad"], 3)

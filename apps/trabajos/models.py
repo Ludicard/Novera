@@ -49,22 +49,49 @@ class UnidadTiempo(models.TextChoices):
     ANIOS = "ANIOS", "años"
 
 
+class FormaPago(models.Model):
+    """Opciones de forma de pago para las proformas (catálogo editable)."""
+
+    nombre = models.CharField(max_length=120, unique=True)
+    orden = models.PositiveSmallIntegerField(default=0, help_text="Posición en la lista (menor = primero).")
+    activa = models.BooleanField(default=True, help_text="Las inactivas no se ofrecen en proformas nuevas.")
+
+    class Meta:
+        ordering = ["orden", "nombre"]
+        verbose_name = "forma de pago"
+        verbose_name_plural = "formas de pago"
+
+    def __str__(self):
+        return self.nombre
+
+
 class Proforma(Auditoria):
+    """Flujo: se solicita autorización → el Manager la autoriza (o la devuelve con observaciones) →
+    se envía al cliente → el cliente la aprueba (genera la orden de trabajo) o la rechaza."""
+
     class Estado(models.TextChoices):
-        BORRADOR = "BORRADOR", "Borrador"
+        BORRADOR = "BORRADOR", "Borrador"  # solo proformas antiguas
+        POR_AUTORIZAR = "POR_AUTORIZAR", "Por autorizar"
+        DEVUELTA = "DEVUELTA", "Devuelta para corregir"
+        AUTORIZADA = "AUTORIZADA", "Autorizada"
         ENVIADA = "ENVIADA", "Enviada al cliente"
-        APROBADA = "APROBADA", "Aprobada"
-        RECHAZADA = "RECHAZADA", "Rechazada"
+        APROBADA = "APROBADA", "Aprobada por el cliente"
+        RECHAZADA = "RECHAZADA", "Rechazada por el cliente"
 
     numero = models.CharField("Número", max_length=20, unique=True, editable=False)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas")
     fecha = models.DateField(default=timezone.localdate)
     validez_dias = models.PositiveSmallIntegerField("Validez (días)", default=15)
-    titulo = models.CharField("Trabajo a realizar", max_length=200)
+    titulo = models.CharField("Resumen", max_length=200, blank=True, help_text="Se toma del detalle de la cotización.")
     descripcion = models.TextField("Detalle / alcance", blank=True)
     porcentaje_iva = models.DecimalField("% IVA", max_digits=5, decimal_places=2, default=Decimal("15"))
-    estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.BORRADOR)
+    estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.POR_AUTORIZAR)
     fecha_respuesta = models.DateField("Fecha de aprobación/rechazo", null=True, blank=True)
+    autorizada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    fecha_autorizacion = models.DateTimeField(null=True, blank=True)
+    observacion_autorizacion = models.TextField("Observaciones del Manager", blank=True)
     forma_pago = models.CharField("Forma de pago", max_length=200, blank=True)
     garantia_cantidad = models.PositiveSmallIntegerField("Garantía", null=True, blank=True)
     garantia_unidad = models.CharField(max_length=6, choices=UnidadTiempo.choices, default=UnidadTiempo.MESES, blank=True)
@@ -116,7 +143,22 @@ class Proforma(Auditoria):
 
     @property
     def editable(self):
-        return self.estado in (self.Estado.BORRADOR, self.Estado.ENVIADA)
+        """Solo mientras no esté autorizada: lo que se envía al cliente es exactamente lo que autorizó el Manager.
+        Para cambiar una autorizada, el Manager la devuelve para corregir."""
+        return self.estado in (self.Estado.BORRADOR, self.Estado.POR_AUTORIZAR, self.Estado.DEVUELTA)
+
+    @property
+    def autorizada(self):
+        return self.estado in (self.Estado.AUTORIZADA, self.Estado.ENVIADA, self.Estado.APROBADA, self.Estado.RECHAZADA)
+
+    def resumen_desde_lineas(self):
+        """El «trabajo a realizar» ya no se escribe aparte: se toma de la primera línea del detalle."""
+        primera = self.lineas.order_by("pk").first()
+        texto = primera.descripcion if primera else f"Cotización para {self.cliente}"
+        n = self.lineas.count()
+        if n > 1:
+            texto = f"{texto} y {n - 1} ítem{'s' if n > 2 else ''} más"
+        return texto[:200]
 
 
 class LineaProforma(models.Model):

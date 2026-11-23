@@ -87,6 +87,7 @@ document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") document.querySelectorAll("details.menu-usuario[open]").forEach(function (d) { d.open = false; });
 });
 </script>
+<script src="{% static 'js/buscador.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -99,6 +99,21 @@ a.accion-grande:hover { border-color: var(--primario); box-shadow: 0 4px 14px rg
 .avance textarea { min-height: 2.5rem; }
 .fila-simple { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--borde); }
 .rojo-fondo { background: var(--rojo) !important; }
+.autorizacion { border-left: 4px solid var(--ambar); }
+.autorizacion textarea { margin-top: .3rem; }
+.combobox { position: relative; }
+.combobox-oculto { position: absolute !important; opacity: 0; pointer-events: none; height: 1px; width: 1px; overflow: hidden; }
+.combobox-texto { padding-right: 2rem; background-image: linear-gradient(45deg, transparent 50%, var(--tenue) 50%), linear-gradient(135deg, var(--tenue) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+.combobox-lista { position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); max-height: 280px; overflow-y: auto; margin: 0; padding: .3rem;
+  list-style: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; box-shadow: 0 12px 28px rgba(16,24,40,.16); }
+.combobox-lista li { padding: .5rem .65rem; border-radius: 7px; cursor: pointer; }
+.combobox-lista li.activo { background: var(--primario-claro); }
+.combobox-lista li.elegido { font-weight: 600; }
+.combobox-lista .combobox-vacio { color: var(--tenue); cursor: default; }
+.con-boton { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.con-boton > .campo { flex: 1 1 280px; }
+.con-boton > .boton { margin-bottom: .1rem; }
 .selector-chico { width: auto; max-width: 240px; height: 2.5rem; }
 .selector-estado label { display: flex; align-items: center; gap: .4rem; }
 .selector-estado select { width: auto; }

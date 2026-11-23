@@ -11,8 +11,8 @@ from django.views.decorators.http import require_POST
 from apps.usuarios.permisos import requiere_rol
 from apps.usuarios.roles import ADMINISTRADOR, MANAGER, ROLES, TECNICO
 
-from .forms import FORMAS_PAGO_SUGERIDAS, InformeForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, tecnicos
-from .models import Informe, OrdenTrabajo, Proforma, Recurso
+from .forms import FormaPagoForm, InformeForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, tecnicos
+from .models import FormaPago, Informe, OrdenTrabajo, Proforma, Recurso
 
 GESTION = (ADMINISTRADOR, MANAGER)
 
@@ -26,15 +26,23 @@ def _gestiona(request):
 
 @requiere_rol(*GESTION)
 def proformas(request):
-    estado = request.GET.get("estado", "")
+    conteos = dict(Proforma.objects.values_list("estado").annotate(n=Count("id")))
+    por_autorizar = conteos.get(Proforma.Estado.POR_AUTORIZAR, 0)
+    defecto = Proforma.Estado.POR_AUTORIZAR if request.rol == MANAGER and por_autorizar else ""
+    estado = request.GET.get("estado", defecto)
     q = request.GET.get("q", "").strip()
-    qs = Proforma.objects.select_related("cliente").prefetch_related("lineas")
+    qs = Proforma.objects.select_related("cliente", "autorizada_por").prefetch_related("lineas")
     if estado:
         qs = qs.filter(estado=estado)
     if q:
         qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q))
-    conteos = dict(Proforma.objects.values_list("estado").annotate(n=Count("id")))
-    pestanas = [("", "Todas", sum(conteos.values()))] + [(c, n, conteos.get(c, 0)) for c, n in Proforma.Estado.choices]
+    orden_estados = [Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.DEVUELTA, Proforma.Estado.AUTORIZADA,
+                     Proforma.Estado.ENVIADA, Proforma.Estado.APROBADA, Proforma.Estado.RECHAZADA]
+    pestanas = [("", "Todas", sum(conteos.values()))] + [
+        (c, Proforma.Estado(c).label, conteos.get(c, 0)) for c in orden_estados
+    ]
+    if conteos.get(Proforma.Estado.BORRADOR):
+        pestanas.append((Proforma.Estado.BORRADOR, "Borrador", conteos[Proforma.Estado.BORRADOR]))
     pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
     return render(request, "trabajos/proformas.html", {"pagina": pagina, "estado": estado, "q": q, "pestanas": pestanas})
 
@@ -50,6 +58,7 @@ def _cliente_inicial(request):
 
 
 def _guardar_proforma(request, proforma=None):
+    """Guardar = solicitar autorización al Manager. Si quien guarda es el Manager, queda autorizada."""
     form = ProformaForm(request.POST or None, instance=proforma, initial=None if proforma else _cliente_inicial(request))
     lineas = LineasFormSet(request.POST or None, instance=form.instance, prefix="lineas")
     if request.method == "POST" and form.is_valid() and lineas.is_valid():
@@ -57,15 +66,27 @@ def _guardar_proforma(request, proforma=None):
             p = form.save(commit=False)
             if not p.pk:
                 p.creado_por = request.user
+            if request.rol == MANAGER:
+                p.estado = Proforma.Estado.AUTORIZADA
+                p.autorizada_por, p.fecha_autorizacion = request.user, timezone.now()
+            else:
+                p.estado = Proforma.Estado.POR_AUTORIZAR
+                p.autorizada_por, p.fecha_autorizacion = None, None
             p.save()
             lineas.instance = p
             lineas.save()
-        messages.success(request, f"Proforma {p.numero} guardada por ${p.total:,.2f}.")
+            p.titulo = p.resumen_desde_lineas()
+            p.save(update_fields=["titulo"])
+        if request.rol == MANAGER:
+            messages.success(request, f"Proforma {p.numero} guardada y autorizada (${p.total:,.2f}).")
+        else:
+            messages.success(request, f"Proforma {p.numero} enviada al Manager para su autorización (${p.total:,.2f}).")
         return redirect(p)
     titulo = f"Editar {proforma.numero}" if proforma else "Nueva proforma"
     return render(request, "trabajos/proforma_form.html", {
-        "form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma, "formas_pago": FORMAS_PAGO_SUGERIDAS,
-        "campos_datos": ["cliente", "titulo", "fecha", "validez_dias", "porcentaje_iva", "descripcion"],
+        "form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma,
+        "campos_datos": ["cliente", "fecha", "validez_dias", "porcentaje_iva"],
+        "forma_pago_form": FormaPagoForm(),
     })
 
 
@@ -78,7 +99,7 @@ def proforma_nueva(request):
 def proforma_editar(request, pk):
     proforma = get_object_or_404(Proforma, pk=pk)
     if not proforma.editable:
-        messages.error(request, "Una proforma aprobada o rechazada ya no se puede editar.")
+        messages.error(request, "Una proforma autorizada ya no se puede editar. Si hay que cambiarla, el Manager debe devolverla para corregir.")
         return redirect(proforma)
     return _guardar_proforma(request, proforma)
 
@@ -92,29 +113,106 @@ def proforma(request, pk):
 @requiere_rol(*GESTION)
 @require_POST
 def proforma_estado(request, pk):
-    """Enviar, aprobar (genera la orden de trabajo), rechazar o volver a borrador."""
+    """Autorizar o devolver (Manager); enviar, aprobada/rechazada por el cliente (al aprobar se genera la orden)."""
     p = get_object_or_404(Proforma, pk=pk)
     accion = request.POST.get("accion")
+    observacion = request.POST.get("observacion", "").strip()
     E = Proforma.Estado
     transiciones = {
-        "enviar": ({E.BORRADOR}, E.ENVIADA),
-        "aprobar": ({E.BORRADOR, E.ENVIADA}, E.APROBADA),
-        "rechazar": ({E.BORRADOR, E.ENVIADA}, E.RECHAZADA),
-        "reabrir": ({E.RECHAZADA}, E.BORRADOR),
+        "autorizar": ({E.POR_AUTORIZAR, E.BORRADOR, E.DEVUELTA}, E.AUTORIZADA),
+        "devolver": ({E.POR_AUTORIZAR, E.BORRADOR, E.AUTORIZADA, E.ENVIADA}, E.DEVUELTA),
+        "enviar": ({E.AUTORIZADA}, E.ENVIADA),
+        "aprobar": ({E.AUTORIZADA, E.ENVIADA}, E.APROBADA),
+        "rechazar": ({E.AUTORIZADA, E.ENVIADA}, E.RECHAZADA),
+        "reabrir": ({E.RECHAZADA}, E.POR_AUTORIZAR),
     }
+    if accion in ("autorizar", "devolver") and request.rol != MANAGER:
+        messages.error(request, "Solo el Manager puede autorizar o devolver proformas.")
+        return redirect(p)
     if accion not in transiciones or p.estado not in transiciones[accion][0]:
         messages.error(request, "Esa acción no es posible en el estado actual de la proforma.")
         return redirect(p)
+    if accion == "devolver" and not observacion:
+        messages.error(request, "Escribe qué hay que corregir para devolver la proforma.")
+        return redirect(p)
     with transaction.atomic():
         p.estado = transiciones[accion][1]
-        p.fecha_respuesta = timezone.localdate() if accion in ("aprobar", "rechazar") else None
-        p.save(update_fields=["estado", "fecha_respuesta", "actualizado"])
+        campos = ["estado", "actualizado"]
+        if accion in ("autorizar", "devolver"):
+            p.autorizada_por = request.user if accion == "autorizar" else None
+            p.fecha_autorizacion = timezone.now() if accion == "autorizar" else None
+            p.observacion_autorizacion = observacion
+            campos += ["autorizada_por", "fecha_autorizacion", "observacion_autorizacion"]
+        if accion in ("aprobar", "rechazar"):
+            p.fecha_respuesta = timezone.localdate()
+            campos.append("fecha_respuesta")
+        p.save(update_fields=campos)
         if accion == "aprobar":
             orden = OrdenTrabajo.desde_proforma(p, request.user)
-            messages.success(request, f"Proforma aprobada: se generó la orden {orden.numero}. Completa fechas, horas y herramientas.")
+            messages.success(request, f"Aprobada por el cliente: se generó la orden {orden.numero}. Completa fechas, técnicos y herramientas.")
             return redirect("trabajos:orden_editar", pk=orden.pk)
-    messages.success(request, f"Proforma {p.numero}: {p.get_estado_display().lower()}.")
+    textos = {
+        "autorizar": f"Proforma {p.numero} autorizada: ya se puede enviar al cliente.",
+        "devolver": f"Proforma {p.numero} devuelta para corregir.",
+        "enviar": f"Proforma {p.numero} marcada como enviada al cliente.",
+        "rechazar": f"Proforma {p.numero} marcada como rechazada por el cliente.",
+        "reabrir": f"Proforma {p.numero} reabierta: vuelve a autorización.",
+    }
+    messages.success(request, textos[accion])
+    if accion in ("autorizar", "devolver"):
+        siguiente = Proforma.objects.filter(estado=E.POR_AUTORIZAR).order_by("creado").first()
+        if siguiente:  # el Manager sigue con la próxima pendiente
+            return redirect(siguiente)
+        return redirect("trabajos:proformas")
     return redirect(p)
+
+
+# ---------------------------------------------------------------- formas de pago (catálogo)
+
+
+@requiere_rol(*GESTION)
+def formas_pago(request):
+    form = FormaPagoForm(request.POST or None, initial={"orden": (FormaPago.objects.order_by("-orden").values_list("orden", flat=True).first() or 0) + 10})
+    if form.is_valid():
+        fp = form.save()
+        messages.success(request, f"Forma de pago «{fp.nombre}» agregada.")
+        return redirect("trabajos:formas_pago")
+    return render(request, "trabajos/formas_pago.html", {"form": form, "formas": FormaPago.objects.all()})
+
+
+@requiere_rol(*GESTION)
+def forma_pago_editar(request, pk):
+    fp = get_object_or_404(FormaPago, pk=pk)
+    form = FormaPagoForm(request.POST or None, instance=fp)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Forma de pago actualizada.")
+        return redirect("trabajos:formas_pago")
+    return render(request, "trabajos/formas_pago.html", {"form": form, "formas": FormaPago.objects.all(), "editando": fp})
+
+
+@requiere_rol(*GESTION)
+@require_POST
+def forma_pago_activar(request, pk):
+    fp = get_object_or_404(FormaPago, pk=pk)
+    fp.activa = not fp.activa
+    fp.save(update_fields=["activa"])
+    messages.success(request, f"«{fp.nombre}» {'activada' if fp.activa else 'desactivada: ya no se ofrece en proformas nuevas'}.")
+    return redirect("trabajos:formas_pago")
+
+
+@requiere_rol(*GESTION)
+@require_POST
+def forma_pago_rapida(request):
+    """Alta desde el formulario de proforma (diálogo): responde JSON."""
+    from django.http import JsonResponse
+
+    form = FormaPagoForm({"nombre": request.POST.get("nombre", ""), "activa": True,
+                          "orden": (FormaPago.objects.order_by("-orden").values_list("orden", flat=True).first() or 0) + 10})
+    if not form.is_valid():
+        return JsonResponse({"errores": [e for lista in form.errors.values() for e in lista]}, status=400)
+    fp = form.save()
+    return JsonResponse({"nombre": fp.nombre})
 
 
 # ---------------------------------------------------------------- órdenes de trabajo
@@ -362,6 +460,9 @@ def proforma_pdf(request, pk):
     from apps.configuracion.models import datos_emisor
 
     p = get_object_or_404(Proforma.objects.select_related("cliente", "creado_por"), pk=pk)
+    if not p.autorizada:
+        messages.error(request, "El PDF se puede generar cuando el Manager haya autorizado la proforma.")
+        return redirect(p)
     empresa = datos_emisor()
     logo = empresa.get("logo_ruta") or finders.find(settings.NOVERA_LOGO)
     html = render_to_string("trabajos/proforma_pdf.html", {

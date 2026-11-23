@@ -3,12 +3,15 @@
 {% block content %}
 <a class="volver" href="{% url 'trabajos:ordenes' %}">← Órdenes de trabajo</a>
 <div class="encabezado">
-  <div><h1>Proformas</h1><span class="tenue">Cotizaciones al cliente. Al aprobarse, generan la orden de trabajo.</span></div>
-  <a class="boton primario" href="{% url 'trabajos:proforma_nueva' %}">+ Nueva proforma</a>
+  <div><h1>Proformas</h1><span class="tenue">{% if rol == "manager" %}Autoriza las proformas antes de que se envíen al cliente{% else %}Cada proforma la autoriza el Manager antes de enviarla al cliente{% endif %}</span></div>
+  <div class="acciones-encabezado">
+    <a class="boton" href="{% url 'trabajos:formas_pago' %}">Formas de pago</a>
+    <a class="boton primario" href="{% url 'trabajos:proforma_nueva' %}">+ Nueva proforma</a>
+  </div>
 </div>
 <nav class="pestanas">
   {% for clave, nombre, n in pestanas %}
-  <a class="pestana {% if clave == estado %}activa{% endif %}" href="?estado={{ clave }}{% if q %}&q={{ q|urlencode }}{% endif %}"><span>{{ nombre }}</span><b>{{ n }}</b></a>
+  <a class="pestana {% if clave == estado %}activa{% endif %}{% if clave == 'POR_AUTORIZAR' and n %} vencida{% endif %}" href="?estado={{ clave }}{% if q %}&q={{ q|urlencode }}{% endif %}"><span>{{ nombre }}</span><b>{{ n }}</b></a>
   {% endfor %}
 </nav>
 <form method="get" class="tarjeta barra-busqueda">

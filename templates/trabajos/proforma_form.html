@@ -2,41 +2,85 @@
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
 <a class="volver" href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">← Volver</a>
-<div class="encabezado"><h1>{{ titulo }}</h1></div>
-<form method="post" class="formulario">
+<div class="encabezado"><div><h1>{{ titulo }}</h1>
+  <span class="tenue">{% if rol == "manager" %}Al guardar quedará autorizada.{% else %}Al guardar se envía al Manager para que la autorice.{% endif %}</span></div></div>
+{% if proforma.estado == "DEVUELTA" and proforma.observacion_autorizacion %}
+<div class="mensaje warning"><strong>El Manager la devolvió:</strong> {{ proforma.observacion_autorizacion }}</div>
+{% endif %}
+<form method="post" class="formulario" id="form-proforma">
   {% csrf_token %}
   <section class="tarjeta">
     <h2>Datos</h2>
     <div class="campos campos-doc">
-      {% for campo in form %}{% if campo.name in campos_datos %}{% include "usuarios/_campo.html" %}{% endif %}{% endfor %}
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente %}</div>
+      {% include "usuarios/_campo.html" with campo=form.fecha %}
+      {% include "usuarios/_campo.html" with campo=form.validez_dias %}
+      {% include "usuarios/_campo.html" with campo=form.porcentaje_iva %}
     </div>
     {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
   </section>
   <section class="tarjeta">
     <h2>Detalle de la cotización</h2>
-    <p class="tenue">Las líneas de tipo <strong>Material</strong> pasarán a la lista de materiales de la orden de trabajo al aprobarse.</p>
+    <p class="tenue">Los trabajos y materiales que se cotizan. Las líneas de tipo <strong>Material</strong> pasarán a la lista de materiales de la orden de trabajo al aprobarse.</p>
     {% include "trabajos/_formset.html" with fs=lineas importe=True %}
     <div class="resumen-montos" id="resumen-proforma">
       <div><span>Subtotal</span><strong id="r-subtotal">$0.00</strong></div>
       <div><span>IVA</span><strong id="r-iva">$0.00</strong></div>
       <div class="total"><span>Total</span><strong id="r-total">$0.00</strong></div>
     </div>
+    <div class="campos campos-doc seccion-chica">
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.descripcion %}</div>
+    </div>
   </section>
   <section class="tarjeta">
     <h2>Condiciones</h2>
     <div class="campos campos-doc">
-      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.forma_pago %}</div>
+      <div class="campo descripcion">
+        <div class="con-boton">{% include "usuarios/_campo.html" with campo=form.forma_pago %}
+          <button type="button" class="boton chico" id="abrir-forma-pago">+ Agregar forma de pago</button></div>
+        <small class="tenue">Las opciones se gestionan en <a href="{% url 'trabajos:formas_pago' %}" target="_blank" rel="noopener">Formas de pago</a>.</small>
+      </div>
       {% include "usuarios/_campo.html" with campo=form.garantia_cantidad %}
       {% include "usuarios/_campo.html" with campo=form.garantia_unidad %}
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.garantia_nota %}</div>
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.condiciones_generales %}</div>
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.notas %}</div>
     </div>
-    <datalist id="formas-pago">{% for f in formas_pago %}<option value="{{ f }}">{% endfor %}</datalist>
     <p class="tenue">La forma de pago, la garantía y las condiciones salen en el PDF; las notas internas no.</p>
   </section>
-  <div class="acciones"><button class="boton primario">Guardar proforma</button>
-    <a href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">Cancelar</a></div>
+  <div class="acciones">
+    <button class="boton primario">{% if rol == "manager" %}Guardar y autorizar{% else %}Solicitar autorización{% endif %}</button>
+    <a href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">Cancelar</a>
+  </div>
 </form>
+
+<dialog id="dlg-forma-pago" class="dialogo">
+  <form id="form-forma-pago" data-url="{% url 'trabajos:forma_pago_rapida' %}">
+    {% csrf_token %}
+    <h2>Agregar forma de pago</h2>
+    <p class="tenue">Quedará disponible para todas las proformas.</p>
+    <div class="campos-dialogo"><label class="ancho">Forma de pago <input name="nombre" required maxlength="120" placeholder="Ej.: 60% Anticipo 40% Al terminar"></label></div>
+    <p class="mensaje error" id="forma-pago-errores" hidden></p>
+    <div class="acciones"><button type="button" class="boton" data-cerrar>Cancelar</button><button class="boton primario">Agregar y elegir</button></div>
+  </form>
+</dialog>
 {% endblock %}
-{% block scripts %}<script src="{% static 'js/formset.js' %}"></script>{% endblock %}
+{% block scripts %}
+<script src="{% static 'js/formset.js' %}"></script>
+<script>
+(function () {
+  var dlg = document.getElementById("dlg-forma-pago"), f = document.getElementById("form-forma-pago");
+  var select = document.querySelector('#form-proforma [name="forma_pago"]'), err = document.getElementById("forma-pago-errores");
+  document.getElementById("abrir-forma-pago").addEventListener("click", function () { f.reset(); err.hidden = true; dlg.showModal(); f.nombre.focus(); });
+  dlg.querySelector("[data-cerrar]").addEventListener("click", function () { dlg.close(); });
+  f.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var r = await fetch(f.dataset.url, { method: "POST", body: new FormData(f) });
+    var d = await r.json().catch(function () { return { errores: ["No se pudo guardar."] }; });
+    if (!r.ok) { err.textContent = (d.errores || []).join(" "); err.hidden = false; return; }
+    select.add(new Option(d.nombre, d.nombre, true, true));
+    dlg.close();
+  });
+})();
+</script>
+{% endblock %}

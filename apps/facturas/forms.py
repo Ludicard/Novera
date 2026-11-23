@@ -80,6 +80,7 @@ class FacturaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["cliente"].required = True
+        self.fields["cliente"].widget.attrs["data-buscar"] = "cliente"
         self.fields["numero"].required = False
         from apps.trabajos.models import OrdenTrabajo
 

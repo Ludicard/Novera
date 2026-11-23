@@ -6,7 +6,8 @@ CLASES = {
     # órdenes y tareas
     "PENDIENTE": "pendiente", "EN_CURSO": "parcial", "TERMINADA": "pagada", "CANCELADA": "anulada", "HECHA": "pagada",
     # proformas
-    "BORRADOR": "anulada", "ENVIADA": "pendiente", "APROBADA": "pagada", "RECHAZADA": "vencida",
+    "BORRADOR": "anulada", "POR_AUTORIZAR": "parcial", "DEVUELTA": "vencida", "AUTORIZADA": "pendiente",
+    "ENVIADA": "pendiente", "APROBADA": "pagada", "RECHAZADA": "vencida",
 }
 
 

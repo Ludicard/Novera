@@ -57,6 +57,7 @@ class EquipoForm(forms.ModelForm):
         actual = getattr(self.instance, "cliente_id", None)
         self.fields["cliente"].queryset = Cliente.objects.filter(activo=True) | Cliente.objects.filter(pk=actual)
         self.fields["cliente"].empty_label = "Elige un cliente"
+        self.fields["cliente"].widget.attrs["data-buscar"] = "cliente"
 
     def clean(self):
         datos = super().clean()

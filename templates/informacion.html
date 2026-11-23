@@ -8,7 +8,7 @@
   <a class="kpi azul" href="{% url 'trabajos:ordenes' %}"><span>Órdenes abiertas</span><strong>{{ kpis.abiertas }}</strong><small>{{ kpis.terminadas_mes }} terminada{{ kpis.terminadas_mes|pluralize }} este mes</small></a>
   <a class="kpi alerta" href="{% url 'trabajos:ordenes' %}"><span>Atrasadas</span><strong>{{ kpis.atrasadas }}</strong><small>pasaron su fecha de finalización</small></a>
   <a class="kpi alerta" href="{% url 'trabajos:ordenes' %}?estado=sin_tecnico"><span>Sin técnico</span><strong>{{ kpis.sin_tecnico }}</strong><small>órdenes abiertas sin asignar</small></a>
-  <a class="kpi verde" href="{% url 'trabajos:proformas' %}"><span>Proformas por responder</span><strong>{{ kpis.pf_por_responder }}</strong><small>{{ kpis.pf_mes }} nueva{{ kpis.pf_mes|pluralize }} este mes{% if kpis.tasa_aprobacion is not None %} · {{ kpis.tasa_aprobacion }} % aprobadas{% endif %}</small></a>
+  <a class="kpi verde" href="{% url 'trabajos:proformas' %}?estado=POR_AUTORIZAR"><span>Proformas por autorizar</span><strong>{{ kpis.pf_por_responder }}</strong><small>{{ kpis.pf_mes }} nueva{{ kpis.pf_mes|pluralize }} este mes{% if kpis.tasa_aprobacion is not None %} · {{ kpis.tasa_aprobacion }} % aprobadas{% endif %}</small></a>
   <a class="kpi neutro" href="{% url 'clientes:lista' %}"><span>Clientes activos</span><strong>{{ kpis.clientes }}</strong><small>{{ kpis.equipos }} equipo{{ kpis.equipos|pluralize }} en servicio</small></a>
   <div class="kpi neutro"><span>Informes este mes</span><strong>{{ kpis.informes_mes }}</strong><small>de los técnicos</small></div>
 </section>

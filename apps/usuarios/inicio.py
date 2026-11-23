@@ -34,10 +34,16 @@ def _mosaicos(request):
 
     abiertas = OrdenTrabajo.objects.filter(estado__in=ABIERTAS)
     sin_tecnico = abiertas.filter(tecnicos__isnull=True).count()
-    por_responder = Proforma.objects.filter(estado__in=[Proforma.Estado.BORRADOR, Proforma.Estado.ENVIADA]).count()
+    por_autorizar = Proforma.objects.filter(estado__in=[Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.BORRADOR]).count()
+    devueltas = Proforma.objects.filter(estado=Proforma.Estado.DEVUELTA).count()
+    if request.rol == MANAGER:
+        alerta_pf = f"{por_autorizar} por autorizar" if por_autorizar else ""
+        dato_pf = "Autorizar cotizaciones antes de enviarlas"
+    else:
+        alerta_pf = _plural(devueltas, "devuelta") if devueltas else ""
+        dato_pf = "Cotizaciones: crear y enviar a autorizar"
     proformas = {"icono": "proforma", "titulo": "Administrar proformas", "url": reverse("trabajos:proformas"),
-                 "color": "verde", "dato": "Cotizaciones: crear, enviar y aprobar",
-                 "alerta": f"{por_responder} por responder" if por_responder else ""}
+                 "color": "verde", "dato": dato_pf, "alerta": alerta_pf}
     ordenes = {"icono": "orden", "titulo": "Administrar órdenes de trabajo", "url": reverse("trabajos:ordenes"),
                "color": "azul", "dato": _plural(abiertas.count(), "abierta"),
                "alerta": f"{sin_tecnico} sin técnico" if sin_tecnico else ""}
@@ -119,7 +125,7 @@ def informacion_general(request):
             "atrasadas": abiertas.filter(fecha_fin__lt=hoy).count(),
             "sin_tecnico": abiertas.filter(tecnicos__isnull=True).count(),
             "terminadas_mes": OrdenTrabajo.objects.filter(estado=OrdenTrabajo.Estado.TERMINADA, actualizado__date__gte=inicio_mes).count(),
-            "pf_por_responder": Proforma.objects.filter(estado__in=[Proforma.Estado.BORRADOR, Proforma.Estado.ENVIADA]).count(),
+            "pf_por_responder": Proforma.objects.filter(estado__in=[Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.BORRADOR]).count(),
             "pf_mes": pf_mes.count(),
             "tasa_aprobacion": round(aprobadas / pf_respondidas.count() * 100) if pf_respondidas.exists() else None,
             "clientes": Cliente.objects.filter(activo=True).count(),
