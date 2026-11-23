@@ -8,43 +8,43 @@
     size: letter;
     margin: 16mm 15mm 20mm 15mm;
     @bottom-left { content: "Proforma {{ p.numero }} · Documento sin validez tributaria: no reemplaza a la factura electrónica."; font-family: "DejaVu Sans", Arial, sans-serif; font-size: 7pt; color: #6b7682; }
-    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-family: "DejaVu Sans", Arial, sans-serif; font-size: 8pt; font-weight: bold; color: #8A6508; }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-family: "DejaVu Sans", Arial, sans-serif; font-size: 8pt; font-weight: bold; color: {{ tema.legible }}; }
   }
   * { box-sizing: border-box; }
   body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 9pt; color: #1d2733; line-height: 1.35; margin: 0; }
-  .azul { color: #8A6508; }
+  .azul { color: {{ tema.legible }}; }
   table { width: 100%; border-collapse: collapse; }
   .cabecera td { vertical-align: top; }
   .emisor { width: 58%; padding-right: 10px; }
   .emisor img { max-width: 48mm; max-height: 22mm; margin-bottom: 6px; }
   .emisor .razon { font-size: 12pt; font-weight: bold; }
-  .emisor .comercial { font-size: 10pt; color: #8A6508; font-weight: bold; }
+  .emisor .comercial { font-size: 10pt; color: {{ tema.legible }}; font-weight: bold; }
   .emisor p { margin: 1px 0; }
-  .caja { border: 1px solid #E3C77A; border-radius: 4px; padding: 8px 10px; }
-  .doc .caja { border-top: 4px solid #D9A21B; }
+  .caja { border: 1px solid {{ tema.borde }}; border-radius: 4px; padding: 8px 10px; }
+  .doc .caja { border-top: 4px solid {{ tema.base }}; }
   .doc { width: 42%; }
-  .doc .titulo { font-size: 17pt; font-weight: bold; letter-spacing: 1px; color: #8A6508; margin: 0 0 4px; }
+  .doc .titulo { font-size: 17pt; font-weight: bold; letter-spacing: 1px; color: {{ tema.legible }}; margin: 0 0 4px; }
   .doc .numero { font-size: 11pt; font-weight: bold; margin-bottom: 6px; }
   .doc table td { padding: 1.5px 0; }
   .doc table td:first-child { color: #52606d; width: 48%; }
   .seccion { margin-top: 10px; }
   .cliente td { padding: 2px 4px; vertical-align: top; }
   .cliente td.et { color: #52606d; width: 22%; white-space: nowrap; }
-  h3 { font-size: 9.5pt; margin: 0 0 4px; color: #8A6508; text-transform: uppercase; letter-spacing: .5px; }
+  h3 { font-size: 9.5pt; margin: 0 0 4px; color: {{ tema.legible }}; text-transform: uppercase; letter-spacing: .5px; }
   .trabajo .tit { font-weight: bold; font-size: 10pt; }
   .detalle { margin-top: 10px; }
-  .detalle th { background: #D9A21B; color: #2B2104; font-size: 8pt; text-transform: uppercase; padding: 5px 6px; text-align: left; }
+  .detalle th { background: {{ tema.base }}; color: {{ tema.sobre }}; font-size: 8pt; text-transform: uppercase; padding: 5px 6px; text-align: left; }
   .detalle th, .detalle td { text-align: left; }
-  .detalle td { padding: 5px 6px; border-bottom: 1px solid #EFE3BF; vertical-align: top; }
-  .detalle tr:nth-child(even) td { background: #FBF5E3; }
+  .detalle td { padding: 5px 6px; border-bottom: 1px solid {{ tema.claro }}; vertical-align: top; }
+  .detalle tr:nth-child(even) td { background: {{ tema.suave }}; }
   .num { text-align: right; white-space: nowrap; }
   .pie td { vertical-align: top; }
   .adicional { width: 58%; padding-right: 10px; }
   .adicional p { margin: 0 0 4px; }
   .totales { width: 42%; }
-  .totales table td { padding: 4px 8px; border: 1px solid #E3C77A; }
+  .totales table td { padding: 4px 8px; border: 1px solid {{ tema.borde }}; }
   .totales table td:first-child { color: #3b4652; }
-  .totales table tr.total td { background: #D9A21B; color: #2B2104; font-weight: bold; font-size: 10.5pt; border-color: #D9A21B; }
+  .totales table tr.total td { background: {{ tema.base }}; color: {{ tema.sobre }}; font-weight: bold; font-size: 10.5pt; border-color: {{ tema.base }}; }
   thead { display: table-header-group; }
   .condiciones { white-space: pre-line; text-align: justify; }
   .firmas { margin-top: 34px; page-break-inside: avoid; }

@@ -30,6 +30,14 @@ class Empresa(models.Model):
     telefono = models.CharField("Teléfono", max_length=60)
     email = models.EmailField("Email")
     web = models.URLField("Web", blank=True, help_text="Opcional. Ej.: https://www.miempresa.com")
+    color_app = models.CharField(
+        "Color de la aplicación", max_length=7, blank=True,
+        help_text="Código de color, p. ej. #1F4E5F. Vacío = azul por defecto.",
+    )
+    color_proforma = models.CharField(
+        "Color de la proforma (PDF)", max_length=7, blank=True,
+        help_text="Código de color, p. ej. #D9A21B (mostaza). Vacío = azul por defecto.",
+    )
     logo = models.ImageField(
         "Logo", upload_to="configuracion/", blank=True,
         help_text="PNG o JPG, hasta 2 MB. Se usa en las proformas en PDF.",
@@ -69,3 +77,18 @@ def datos_emisor():
         "direccion": e.direccion_matriz, "telefono": e.telefono, "email": e.email, "web": e.web,
         "logo_ruta": e.logo.path if e.logo else None,
     }
+
+
+def tema_aplicacion():
+    """Paleta del color de la aplicación (azul por defecto si no se configuró)."""
+    from .colores import paleta
+
+    e = Empresa.actual()
+    return paleta(e.color_app if e else "")
+
+
+def tema_proforma():
+    from .colores import paleta
+
+    e = Empresa.actual()
+    return paleta(e.color_proforma if e else "")

@@ -457,7 +457,7 @@ def proforma_pdf(request, pk):
     from django.utils.text import slugify
     from weasyprint import HTML
 
-    from apps.configuracion.models import datos_emisor
+    from apps.configuracion.models import datos_emisor, tema_proforma
 
     p = get_object_or_404(Proforma.objects.select_related("cliente", "creado_por"), pk=pk)
     if not p.autorizada:
@@ -466,7 +466,7 @@ def proforma_pdf(request, pk):
     empresa = datos_emisor()
     logo = empresa.get("logo_ruta") or finders.find(settings.NOVERA_LOGO)
     html = render_to_string("trabajos/proforma_pdf.html", {
-        "p": p, "lineas": p.lineas.all(), "empresa": empresa,
+        "p": p, "lineas": p.lineas.all(), "empresa": empresa, "tema": tema_proforma(),
         "logo": f"file://{logo}" if logo else None,
         "elaborado_por": (p.creado_por.get_full_name() or p.creado_por.username) if p.creado_por else "",
     })

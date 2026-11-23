@@ -15,14 +15,31 @@ class EmpresaForm(forms.ModelForm):
 
     class Meta:
         model = Empresa
-        fields = ["razon_social", "nombre_comercial", "ruc", "direccion_matriz", "telefono", "email", "web", "logo"]
+        fields = ["razon_social", "nombre_comercial", "ruc", "direccion_matriz", "telefono", "email", "web",
+                  "color_app", "color_proforma", "logo"]
         widgets = {
             "ruc": forms.TextInput(attrs={"inputmode": "numeric", "maxlength": 13, "autocomplete": "off"}),
             "logo": forms.FileInput(attrs={"accept": "image/png,image/jpeg"}),
+            "color_app": forms.TextInput(attrs={"placeholder": "#1F4E5F", "maxlength": 7, "data-color": "1", "autocomplete": "off"}),
+            "color_proforma": forms.TextInput(attrs={"placeholder": "#1F4E5F", "maxlength": 7, "data-color": "1", "autocomplete": "off"}),
         }
 
     def clean_razon_social(self):
         return " ".join(self.cleaned_data["razon_social"].split())
+
+    def _color(self, campo):
+        from .colores import normalizar
+
+        try:
+            return normalizar(self.cleaned_data.get(campo))
+        except ValueError:
+            raise forms.ValidationError("Escribe un código de color de 6 dígitos hexadecimales, por ejemplo #D9A21B.")
+
+    def clean_color_app(self):
+        return self._color("color_app")
+
+    def clean_color_proforma(self):
+        return self._color("color_proforma")
 
     def clean_ruc(self):
         return self.cleaned_data["ruc"].strip()

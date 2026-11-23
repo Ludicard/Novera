@@ -391,7 +391,10 @@ class ProformaPdfTests(Base):
 
         from django.conf import settings
 
-        html = render_to_string("trabajos/proforma_pdf.html", {"p": self.p, "lineas": self.p.lineas.all(), "empresa": settings.NOVERA_EMPRESA})
+        from apps.configuracion.models import tema_proforma
+
+        html = render_to_string("trabajos/proforma_pdf.html", {"p": self.p, "lineas": self.p.lineas.all(),
+                                                                 "empresa": settings.NOVERA_EMPRESA, "tema": tema_proforma()})
         pagina = HTML(string=html).render().pages[0]
         self.assertEqual((round(pagina.width * 0.75), round(pagina.height * 0.75)), (612, 792))
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]) + "?ver=1")

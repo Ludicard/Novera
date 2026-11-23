@@ -72,6 +72,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.usuarios.context_processors.rol",
+                "apps.configuracion.context_processors.tema",
             ],
         },
     },

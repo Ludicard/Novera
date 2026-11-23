@@ -1,5 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Configuración{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var AZUL = "#1F4E5F", PATRON = /^#?[0-9a-fA-F]{6}$/;
+  document.querySelectorAll(".campo-color").forEach(function (bloque) {
+    var texto = bloque.querySelector("input[data-color]"), selector = bloque.querySelector("input[type=color]");
+    var muestra = bloque.querySelector(".muestra-color"), reset = bloque.querySelector("[data-azul]");
+    function normal(v) { v = v.trim(); return PATRON.test(v) ? ("#" + v.replace("#", "")).toUpperCase() : null; }
+    function pintar() {
+      var c = normal(texto.value) || (texto.value.trim() ? null : AZUL);
+      bloque.classList.toggle("con-error-color", c === null);
+      if (c) { selector.value = c.toLowerCase(); muestra.style.background = c; muestra.textContent = texto.value.trim() ? c : "Azul por defecto"; }
+    }
+    selector.addEventListener("input", function () { texto.value = selector.value.toUpperCase(); pintar(); });
+    texto.addEventListener("input", pintar);
+    reset.addEventListener("click", function () { texto.value = ""; pintar(); });
+    pintar();
+  });
+})();
+</script>
+{% endblock %}
 {% block content %}
 <a class="volver" href="{% url 'inicio' %}">← Inicio</a>
 <div class="encabezado"><div><h1>Configuración</h1><span class="tenue">Datos de la empresa que salen en las proformas en PDF</span></div></div>
@@ -17,6 +38,12 @@
       {% include "usuarios/_campo.html" with campo=form.telefono %}
       {% include "usuarios/_campo.html" with campo=form.email %}
       <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.web %}</div>
+    </div>
+    <h2 class="seccion">Colores</h2>
+    <p class="tenue">Escribe un código de color (p. ej. <code>#D9A21B</code>) o elígelo en el cuadro de color. Vacío = azul por defecto (<code>#1F4E5F</code>). El texto encima se ajusta solo para que se lea bien.</p>
+    <div class="campos">
+      {% include "configuracion/_color.html" with campo=form.color_app %}
+      {% include "configuracion/_color.html" with campo=form.color_proforma %}
     </div>
     <h2 class="seccion">Logo</h2>
     {% if empresa.logo %}

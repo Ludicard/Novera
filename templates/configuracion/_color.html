@@ -1,0 +1,10 @@
+<div class="campo campo-color{% if campo.errors %} con-error{% endif %}">
+  <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+  <div class="fila-color">
+    <input type="color" aria-label="Elegir {{ campo.label|lower }}" value="#1f4e5f">
+    {{ campo }}
+    <button type="button" class="enlace" data-azul>Usar azul</button>
+  </div>
+  <span class="muestra-color" aria-hidden="true">Azul por defecto</span>
+  {% for e in campo.errors %}<small class="error">{{ e }}</small>{% endfor %}
+</div>

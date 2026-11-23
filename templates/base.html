@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Novera{% endblock %} · Novera</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% if tema_app and not tema_app.es_defecto %}
+  <style>:root { --primario: {{ tema_app.base }}; --primario-claro: {{ tema_app.claro }}; --primario-texto: {{ tema_app.legible }};
+    --sobre-primario: {{ tema_app.sobre }}; --primario-hover: {{ tema_app.hover }};
+    --mosaico-1: {{ tema_app.base }}; --mosaico-2: {{ tema_app.oscuro }}; --mosaico-texto: {{ tema_app.sobre }}; }</style>
+  <meta name="theme-color" content="{{ tema_app.base }}">
+  {% endif %}
 </head>
 <body>
 {% block barra %}{% if user.is_authenticated %}

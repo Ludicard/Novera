@@ -105,3 +105,53 @@ class ConfiguracionTests(TestCase):
         u = User.objects.create_user("mana", password=CLAVE)
         entrar_como(self.client, u, MANAGER)
         self.assertNotContains(self.client.get(reverse("inicio")), self.url)
+
+
+@override_settings(MEDIA_ROOT=MEDIA)
+class ColoresTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user("jefa", password=CLAVE)
+        entrar_como(self.client, self.admin, ADMINISTRADOR)
+        self.url = reverse("configuracion:empresa")
+
+    def test_por_defecto_azul(self):
+        from apps.configuracion.models import tema_aplicacion, tema_proforma
+
+        self.assertEqual((tema_aplicacion()["base"], tema_proforma()["base"]), ("#1F4E5F", "#1F4E5F"))
+        self.assertNotContains(self.client.get(reverse("inicio")), "--primario:")  # usa el CSS por defecto
+
+    def test_guardar_colores_normaliza_y_aplica(self):
+        self.client.post(self.url, datos(color_app="2e7d32", color_proforma="#d9a21b"))
+        e = Empresa.actual()
+        self.assertEqual((e.color_app, e.color_proforma), ("#2E7D32", "#D9A21B"))
+        r = self.client.get(reverse("inicio"))
+        self.assertContains(r, "--primario: #2E7D32")
+        # Mostaza es claro: el texto encima va oscuro y el tono para títulos se oscurece
+        from apps.configuracion.models import tema_proforma
+
+        t = tema_proforma()
+        self.assertEqual(t["sobre"], "#1D2733")
+        from apps.configuracion.colores import contraste
+        self.assertGreaterEqual(contraste(t["legible"], "#FFFFFF"), 4.5)
+
+    def test_codigo_invalido(self):
+        for malo in ["azul", "#12345", "#GGGGGG", "url(x)"]:
+            r = self.client.post(self.url, datos(color_app=malo))
+            self.assertIn("color_app", r.context["form"].errors, malo)
+
+    def test_vacio_vuelve_al_azul(self):
+        self.client.post(self.url, datos(color_app="#2E7D32"))
+        self.client.post(self.url, datos(color_app=""))
+        self.assertNotContains(self.client.get(reverse("inicio")), "--primario:")
+
+    def test_pdf_usa_el_color_de_la_proforma(self):
+        from django.template.loader import render_to_string
+
+        from apps.clientes.models import Cliente
+        from apps.configuracion.models import tema_proforma
+        from apps.trabajos.models import Proforma
+
+        self.client.post(self.url, datos(color_proforma="#D9A21B"))
+        p = Proforma.objects.create(cliente=Cliente.objects.create(nombre="X"), estado="AUTORIZADA")
+        html = render_to_string("trabajos/proforma_pdf.html", {"p": p, "lineas": [], "empresa": datos_emisor(), "tema": tema_proforma()})
+        self.assertIn("background: #D9A21B", html)
