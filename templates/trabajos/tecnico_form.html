@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load trabajos %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'trabajos:tecnicos' %}">← Clientes y técnicos</a>
+<div class="encabezado"><div><h1>{{ titulo }}</h1>
+  {% if cuenta %}<span class="tenue">Inicia sesión como <strong>{{ cuenta.username }}</strong>{% if cuenta.last_login %} · último acceso {{ cuenta.last_login|date:"d/m/Y H:i" }}{% else %} · aún no ha entrado{% endif %}</span>{% endif %}</div></div>
+<div class="rejilla panel">
+  <form method="post" class="tarjeta formulario cuenta-form" autocomplete="off">
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+    <h2>Datos</h2>
+    <div class="campos">
+      {% include "usuarios/_campo.html" with campo=form.first_name %}
+      {% include "usuarios/_campo.html" with campo=form.last_name %}
+      {% include "usuarios/_campo.html" with campo=form.username %}
+      {% include "usuarios/_campo.html" with campo=form.email %}
+      {% if form.activo %}<div class="campo activo"><label class="interruptor-campo">{{ form.activo }} {{ form.activo.label }}</label><small>{{ form.activo.help_text }}</small></div>{% endif %}
+    </div>
+    <h2 class="seccion">{% if cuenta %}Cambiar contraseña <small class="tenue">(opcional)</small>{% else %}Contraseña{% endif %}</h2>
+    <div class="campos">
+      {% include "usuarios/_campo.html" with campo=form.password1 %}
+      {% include "usuarios/_campo.html" with campo=form.password2 %}
+    </div>
+    <p class="tenue">Distingue mayúsculas y minúsculas. Compártela con el técnico de forma segura.</p>
+    <div class="acciones"><button class="boton primario">{% if cuenta %}Guardar cambios{% else %}Crear técnico{% endif %}</button><a href="{% url 'trabajos:tecnicos' %}">Cancelar</a></div>
+  </form>
+  {% if cuenta %}
+  <section class="tarjeta">
+    <h2>Órdenes de trabajo</h2>
+    {% for o in ordenes %}<div class="fila-simple"><div><a class="numero" href="{{ o.get_absolute_url }}">{{ o.numero }}</a> {{ o.titulo }}<small class="tenue bloque">{{ o.cliente }}</small></div>{% insignia o %}</div>
+    {% empty %}<p class="tenue">Sin órdenes asignadas.</p>{% endfor %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

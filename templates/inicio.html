@@ -9,7 +9,7 @@
     </div>
     <span class="tenue">{% now "l j \d\e F" %}</span>
   </div>
-  <div class="mosaicos">
+  <div class="mosaicos{% if columnas == 3 %} tres{% endif %}">
     {% for m in mosaicos %}
     <a class="mosaico acento-{{ m.color }}{% if m.ancho %} ancho{% endif %}" href="{{ m.url }}">
       <span class="mosaico-icono">{% include "_icono_menu.html" with icono=m.icono %}</span>

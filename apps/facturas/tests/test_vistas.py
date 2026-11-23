@@ -18,7 +18,7 @@ from apps.facturas.models import Factura, Pago
 class VistasTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
-        entrar_como(self.client, self.user, "manager")
+        entrar_como(self.client, self.user, "administrador")
         self.cliente = Cliente.objects.create(nombre="Edificio Central", dias_credito=15)
 
     def datos_factura(self, **extra):
@@ -136,7 +136,7 @@ class PanelTests(TestCase):
     def setUp(self):
         from datetime import date
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
-        entrar_como(self.client, self.user, "manager")
+        entrar_como(self.client, self.user, "administrador")
         self.cliente = Cliente.objects.create(nombre="Edificio Central")
         self.hoy = date(2025, 6, 15)
         def factura(numero, emision, total, dias=30):
@@ -189,7 +189,7 @@ class ListadoTests(TestCase):
     def setUp(self):
         from datetime import date
         self.user = User.objects.create_user("usuario", password="clave-segura-123")
-        entrar_como(self.client, self.user, "manager")
+        entrar_como(self.client, self.user, "administrador")
         self.cliente = Cliente.objects.create(nombre="Edificio Central")
         hoy = timezone.localdate()
         def factura(n, total, dias_atras):
@@ -368,7 +368,7 @@ class PeriodoListadoTests(TestCase):
 
         from apps.facturas.views import _mover_mes
         user = User.objects.create_user("usuario", password="clave-segura-123")
-        entrar_como(self.client, user, "manager")
+        entrar_como(self.client, user, "administrador")
         cliente = Cliente.objects.create(nombre="Edificio Central")
         hoy = timezone.localdate()
         self.este_mes = hoy.replace(day=1)

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Generar informe{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'inicio' %}">← Inicio</a>
+<div class="encabezado"><div><h1>Generar informe</h1><span class="tenue">Reporta lo que hiciste en una de tus órdenes de trabajo</span></div></div>
+<div class="rejilla panel">
+  <section class="tarjeta">
+    {% if hay_ordenes %}
+    <form method="post" class="formulario informe-form">
+      {% csrf_token %}
+      <div class="campos campos-doc">{% include "_campos.html" %}</div>
+      <p class="tenue">Si marcas «El trabajo de la orden quedó terminado», la orden pasa a <strong>Terminada</strong>.</p>
+      <div class="acciones"><button class="boton primario">Guardar informe</button></div>
+    </form>
+    {% else %}
+    <div class="vacio"><h2>No tienes órdenes abiertas</h2><p class="tenue">Cuando te asignen una orden de trabajo podrás generar su informe aquí.</p></div>
+    {% endif %}
+  </section>
+  <section class="tarjeta">
+    <h2>Mis últimos informes</h2>
+    {% for i in mios %}
+    <div class="fila-simple"><div><a class="numero" href="{{ i.orden.get_absolute_url }}">{{ i.orden.numero }}</a> {{ i.orden.titulo }}{% if i.trabajo_terminado %} <span class="estado pagada">terminado</span>{% endif %}
+      <small class="tenue bloque">{{ i.orden.cliente }} · {{ i.trabajo_realizado|truncatechars:70 }}</small></div>
+      <span class="tenue nowrap">{{ i.fecha|date:"d/m/Y" }}{% if i.horas_trabajadas %} · {{ i.horas_trabajadas|floatformat:"-1" }} h{% endif %}</span></div>
+    {% empty %}<p class="tenue">Aún no has generado informes.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

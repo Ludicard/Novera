@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Equipos{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'inicio' %}">← Inicio</a>
+<div class="encabezado">
+  <div><h1>Administrar equipos</h1><span class="tenue">Ascensores y equipos instalados en cada cliente</span></div>
+  <a class="boton primario" href="{% url 'clientes:equipo_nuevo' %}{% if cliente %}?cliente={{ cliente.pk }}{% endif %}">+ Nuevo equipo</a>
+</div>
+<nav class="pestanas">
+  <a class="pestana {% if ver == 'activos' %}activa{% endif %}" href="?ver=activos{% if cliente %}&cliente={{ cliente.pk }}{% endif %}"><span>En servicio</span></a>
+  <a class="pestana {% if ver == 'retirados' %}activa{% endif %}" href="?ver=retirados{% if cliente %}&cliente={{ cliente.pk }}{% endif %}"><span>Retirados</span></a>
+  <a class="pestana {% if ver == 'todos' %}activa{% endif %}" href="?ver=todos{% if cliente %}&cliente={{ cliente.pk }}{% endif %}"><span>Todos</span></a>
+</nav>
+<form method="get" class="tarjeta barra-busqueda">
+  <input type="hidden" name="ver" value="{{ ver }}">
+  <div class="busqueda"><span class="lupa" aria-hidden="true">⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre, cliente, marca, modelo o serie…"></div>
+  <select name="cliente" onchange="this.form.submit()" class="selector-chico">
+    <option value="">Todos los clientes</option>
+    {% for c in clientes %}<option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="tipo" onchange="this.form.submit()" class="selector-chico">
+    <option value="">Todos los tipos</option>
+    {% for v, t in tipos %}<option value="{{ v }}" {% if v == tipo %}selected{% endif %}>{{ t }}</option>{% endfor %}
+  </select>
+  <button class="boton">Buscar</button>
+</form>
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista facturas">
+  <thead><tr><th>Equipo</th><th>Cliente</th><th class="ocultar-movil">Marca / modelo</th><th class="ocultar-movil">Ubicación</th><th class="num">Órdenes</th></tr></thead>
+  <tbody>
+  {% for e in pagina %}
+    <tr class="fila {% if not e.activo %}inactiva{% endif %}" data-url="{{ e.get_absolute_url }}" onclick="if(!event.target.closest('a'))location=this.dataset.url">
+      <td><a class="numero" href="{{ e.get_absolute_url }}">{{ e.nombre }}</a><small class="tenue bloque">{{ e.get_tipo_display }}{% if not e.activo %} · retirado{% endif %}</small></td>
+      <td>{{ e.cliente }}</td>
+      <td class="ocultar-movil">{{ e.marca|default:"—" }} {{ e.modelo }}</td>
+      <td class="ocultar-movil">{{ e.ubicacion|default:"—" }}</td>
+      <td class="num">{{ e.n_ordenes }}{% if e.abiertas %} <small class="ambar bloque">{{ e.abiertas }} abierta{{ e.abiertas|pluralize }}</small>{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="vacio-tabla"><strong>No hay equipos{% if q or cliente or tipo %} con estos filtros{% endif %}.</strong><a href="{% url 'clientes:equipo_nuevo' %}">Registrar uno</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% include "_paginacion.html" %}
+{% endblock %}

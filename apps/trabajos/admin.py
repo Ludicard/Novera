@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import LineaProforma, OrdenTrabajo, Proforma, Recurso, Tarea
+from .models import Informe, LineaProforma, OrdenTrabajo, Proforma, Recurso
 
 
 class LineaInline(admin.TabularInline):
@@ -22,10 +22,10 @@ class RecursoInline(admin.TabularInline):
     extra = 0
 
 
-class TareaInline(admin.TabularInline):
-    model = Tarea
+class InformeInline(admin.StackedInline):
+    model = Informe
     extra = 0
-    fields = ["tecnico", "responsabilidades", "fecha_limite", "horas_estimadas", "estado"]
+    fields = ["tecnico", "fecha", "horas_trabajadas", "trabajo_realizado", "materiales_usados", "observaciones", "trabajo_terminado"]
 
 
 @admin.register(OrdenTrabajo)
@@ -34,4 +34,5 @@ class OrdenAdmin(admin.ModelAdmin):
     list_filter = ["estado"]
     search_fields = ["numero", "titulo", "cliente__nombre"]
     autocomplete_fields = ["cliente"]
-    inlines = [RecursoInline, TareaInline]
+    inlines = [RecursoInline, InformeInline]
+    filter_horizontal = ["tecnicos"]

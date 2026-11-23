@@ -15,8 +15,8 @@ urlpatterns = [
     path("proformas/<int:pk>/", views.proforma, name="proforma"),
     path("proformas/<int:pk>/editar/", views.proforma_editar, name="proforma_editar"),
     path("proformas/<int:pk>/estado/", views.proforma_estado, name="proforma_estado"),
-    path("asignar/", views.asignar, name="asignar"),
-    path("tareas/<int:pk>/quitar/", views.tarea_quitar, name="tarea_quitar"),
-    path("tareas/<int:pk>/avance/", views.tarea_avance, name="tarea_avance"),
-    path("mis-tareas/", views.mis_tareas, name="mis_tareas"),
+    path("informes/", views.informes, name="informes"),
+    path("tecnicos/", views.tecnicos_lista, name="tecnicos"),
+    path("tecnicos/nuevo/", views.tecnico_nuevo, name="tecnico_nuevo"),
+    path("tecnicos/<int:pk>/", views.tecnico_editar, name="tecnico_editar"),
 ]

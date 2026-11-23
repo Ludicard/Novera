@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<a class="volver" href="{% if equipo %}{{ equipo.get_absolute_url }}{% else %}{% url 'clientes:equipos' %}{% endif %}">← Volver</a>
+<div class="encabezado"><h1>{{ titulo }}</h1></div>
+<form method="post" class="tarjeta formulario">
+  {% csrf_token %}
+  <div class="campos campos-doc">{% include "_campos.html" %}</div>
+  <div class="acciones"><button class="boton primario">Guardar equipo</button>
+    <a href="{% if equipo %}{{ equipo.get_absolute_url }}{% else %}{% url 'clientes:equipos' %}{% endif %}">Cancelar</a></div>
+</form>
+{% endblock %}

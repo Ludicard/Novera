@@ -1,33 +1,32 @@
 {% extends "base.html" %}{% load novera %}
-{% block title %}Clientes{% endblock %}
+{% block title %}Clientes y técnicos{% endblock %}
 {% block content %}
-<div class="encabezado">
-  <h1>Clientes</h1>
-  <a class="boton primario" href="{% url 'clientes:nuevo' %}">+ Nuevo cliente</a>
-</div>
-<form method="get" class="filtros tarjeta">
-  <label>Buscar <input type="search" name="q" value="{{ q }}" placeholder="Nombre o RUC"></label>
-  <label>Ordenar <select name="orden">
-    <option value="nombre" {% if orden == "nombre" %}selected{% endif %}>Nombre</option>
+{% include "clientes/_pestanas_directorio.html" with seccion="clientes" %}
+<form method="get" class="tarjeta barra-busqueda">
+  <div class="busqueda"><span class="lupa" aria-hidden="true">⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre o RUC…"></div>
+  {% if rol == "administrador" %}
+  <select name="orden" class="selector-chico" onchange="this.form.submit()">
+    <option value="nombre" {% if orden == "nombre" %}selected{% endif %}>Ordenar por nombre</option>
     <option value="saldo" {% if orden == "saldo" %}selected{% endif %}>Mayor saldo</option>
-  </select></label>
-  <label class="check"><input type="checkbox" name="con_saldo" value="1" {% if request.GET.con_saldo %}checked{% endif %}> Solo con saldo</label>
-  <button class="boton">Filtrar</button>
+  </select>
+  <label class="interruptor"><input type="checkbox" name="con_saldo" value="1" {% if request.GET.con_saldo %}checked{% endif %} onchange="this.form.submit()"> Solo con saldo</label>
+  {% endif %}
+  <button class="boton">Buscar</button>
 </form>
 <div class="tarjeta sin-relleno desplazable">
-<table class="lista">
-  <thead><tr><th>Cliente</th><th>RUC / Cédula</th><th class="num">Crédito</th><th class="num">Facturas</th><th class="num">Facturado</th><th class="num">Saldo</th></tr></thead>
+<table class="lista facturas">
+  <thead><tr><th>Cliente</th><th>RUC / Cédula</th><th class="ocultar-movil">Contacto</th><th class="num">Equipos</th>
+    {% if rol == "administrador" %}<th class="num ocultar-movil">Facturado</th><th class="num">Saldo</th>{% endif %}</tr></thead>
   <tbody>
   {% for c in pagina %}
-    <tr class="{% if not c.activo %}tenue{% endif %}">
-      <td><a href="{{ c.get_absolute_url }}">{{ c.nombre }}</a></td>
-      <td>{{ c.identificacion|default:"—" }}</td>
-      <td class="num">{{ c.dias_credito }} d</td>
-      <td class="num">{{ c.num_facturas }}</td>
-      <td class="num">{{ c.facturado|dinero }}</td>
-      <td class="num"><strong>{{ c.saldo|dinero }}</strong></td>
+    <tr class="fila {% if not c.activo %}inactiva{% endif %}" data-url="{{ c.get_absolute_url }}" onclick="if(!event.target.closest('a'))location=this.dataset.url">
+      <td><a class="numero" href="{{ c.get_absolute_url }}">{{ c.nombre }}</a>{% if not c.activo %}<small class="tenue bloque">inactivo</small>{% endif %}</td>
+      <td class="nowrap">{{ c.identificacion|default:"—" }}</td>
+      <td class="ocultar-movil">{{ c.telefono|default:"" }}{% if c.telefono and c.email %} · {% endif %}{{ c.email|default:"" }}{% if not c.telefono and not c.email %}—{% endif %}</td>
+      <td class="num">{{ c.num_equipos }}</td>
+      {% if rol == "administrador" %}<td class="num ocultar-movil">{{ c.facturado|dinero }}</td><td class="num"><strong>{{ c.saldo|dinero }}</strong></td>{% endif %}
     </tr>
-  {% empty %}<tr><td colspan="6" class="tenue centro">No hay clientes.</td></tr>
+  {% empty %}<tr><td colspan="6" class="vacio-tabla"><strong>No hay clientes{% if q %} que coincidan{% endif %}.</strong></td></tr>
   {% endfor %}
   </tbody>
 </table>

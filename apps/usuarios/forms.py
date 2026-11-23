@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 
-from .roles import ADMINISTRADOR, ROLES, administradores_activos, roles_de
+from .roles import ADMINISTRADOR, ROLES, TECNICO, administradores_activos, roles_de
 
 Usuario = get_user_model()
 
@@ -88,3 +88,15 @@ class CuentaForm(forms.ModelForm):
         if era_admin and not sigue_admin and not administradores_activos(excluir=u).exists():
             self.add_error(None, "Debe quedar al menos un Administrador activo.")
         return datos
+
+
+class TecnicoForm(CuentaForm):
+    """Cuenta de técnico para el Manager: mismo formulario, con el rol fijo en Técnico."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("roles")
+
+    def clean(self):
+        self.cleaned_data["roles"] = [TECNICO]
+        return super().clean()

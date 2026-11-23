@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.db import transaction
 
-from .models import Cliente
+from .models import Cliente, Equipo
 
 
 @admin.register(Cliente)
@@ -30,3 +30,11 @@ class ClienteAdmin(admin.ModelAdmin):
             destino.save()
         nombres = ", ".join(o.nombre for o in otros)
         self.message_user(request, f"Fusionados en «{destino}»: {nombres}.", messages.SUCCESS)
+
+
+@admin.register(Equipo)
+class EquipoAdmin(admin.ModelAdmin):
+    list_display = ["nombre", "cliente", "tipo", "marca", "modelo", "activo"]
+    list_filter = ["tipo", "activo"]
+    search_fields = ["nombre", "cliente__nombre", "marca", "modelo", "numero_serie"]
+    autocomplete_fields = ["cliente"]

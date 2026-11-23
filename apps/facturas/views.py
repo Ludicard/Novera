@@ -346,6 +346,15 @@ def _dias_credito_clientes():
 @login_required
 def nueva(request):
     inicial = {}
+    if request.GET.get("orden", "").isdigit():  # «Facturar esta orden» desde la orden de trabajo
+        from apps.trabajos.models import OrdenTrabajo
+
+        orden = OrdenTrabajo.objects.select_related("cliente", "proforma").filter(pk=request.GET["orden"]).first()
+        if orden:
+            inicial = {"cliente": orden.cliente, "dias_credito": orden.cliente.dias_credito, "ordenes": [orden],
+                       "objeto": orden.titulo[:255]}
+            if orden.proforma:
+                inicial["subtotal"] = orden.proforma.subtotal
     if request.GET.get("cliente", "").isdigit():
         cliente = Cliente.objects.filter(pk=request.GET["cliente"]).first()
         if cliente:
@@ -357,14 +366,15 @@ def nueva(request):
         factura = form.save(commit=False)
         factura.creado_por = request.user
         factura.save()
-        messages.success(request, f"Factura {factura.numero} registrada por ${factura.total:,.2f}.")
+        form.save_m2m()
+        messages.success(request, f"{factura.get_tipo_display()} {factura.numero} registrada por ${factura.total:,.2f}.")
         if "otra" in request.POST:
             return redirect("facturas:nueva")
         return redirect(factura)
     return render(
         request,
         "facturas/form.html",
-        {"form": form, "titulo": "Nueva factura", "dias_clientes": _dias_credito_clientes()},
+        {"form": form, "titulo": "Generar factura o recibo", "dias_clientes": _dias_credito_clientes()},
     )
 
 

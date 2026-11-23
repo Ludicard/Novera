@@ -9,10 +9,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.usuarios.permisos import requiere_rol
-from apps.usuarios.roles import ADMINISTRADOR, MANAGER, TECNICO
+from apps.usuarios.roles import ADMINISTRADOR, MANAGER, ROLES, TECNICO
 
-from .forms import AvanceTareaForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, TareaForm, tecnicos
-from .models import OrdenTrabajo, Proforma, Recurso, Tarea
+from .forms import InformeForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, tecnicos
+from .models import Informe, OrdenTrabajo, Proforma, Recurso
 
 GESTION = (ADMINISTRADOR, MANAGER)
 
@@ -41,7 +41,12 @@ def proformas(request):
 
 def _cliente_inicial(request):
     cliente = request.GET.get("cliente", "")
-    return {"cliente": cliente} if cliente.isdigit() else None
+    if not cliente.isdigit():
+        return None
+    inicial = {"cliente": cliente}
+    if request.GET.get("equipo", "").isdigit():
+        inicial["equipos"] = [request.GET["equipo"]]
+    return inicial
 
 
 def _guardar_proforma(request, proforma=None):
@@ -114,26 +119,25 @@ def proforma_estado(request, pk):
 
 @login_required
 def ordenes(request):
-    """Gestión: todas. Técnico: solo las órdenes en las que tiene tareas (solo lectura)."""
+    """Gestión: todas. Técnico: solo las órdenes en las que está asignado."""
     estado = request.GET.get("estado", "abiertas")
     q = request.GET.get("q", "").strip()
     base = OrdenTrabajo.objects.select_related("cliente").annotate(
-        n_tareas=Count("tareas", distinct=True),
-        n_hechas=Count("tareas", filter=Q(tareas__estado=Tarea.Estado.HECHA), distinct=True),
+        n_tecnicos=Count("tecnicos", distinct=True), n_informes=Count("informes", distinct=True),
     )
     if not _gestiona(request):
-        base = base.filter(tareas__tecnico=request.user).distinct()
+        base = base.filter(tecnicos=request.user)
     abiertas = [OrdenTrabajo.Estado.PENDIENTE, OrdenTrabajo.Estado.EN_CURSO]
     conteos = {
         "abiertas": base.filter(estado__in=abiertas).count(),
-        "sin_tecnico": base.filter(estado__in=abiertas, n_tareas=0).count(),
+        "sin_tecnico": base.filter(estado__in=abiertas, n_tecnicos=0).count(),
         **{c: base.filter(estado=c).count() for c, _ in OrdenTrabajo.Estado.choices},
     }
     qs = base
     if estado == "abiertas":
         qs = qs.filter(estado__in=abiertas)
     elif estado == "sin_tecnico":
-        qs = qs.filter(estado__in=abiertas, n_tareas=0)
+        qs = qs.filter(estado__in=abiertas, n_tecnicos=0)
     elif estado in OrdenTrabajo.Estado.values:
         qs = qs.filter(estado=estado)
     if q:
@@ -141,7 +145,7 @@ def ordenes(request):
     qs = qs.order_by("fecha_fin", "-creado") if estado in ("abiertas", "sin_tecnico") else qs.order_by("-creado")
     pestanas = [("abiertas", "Abiertas"), ("sin_tecnico", "Sin técnico")] if _gestiona(request) else [("abiertas", "Abiertas")]
     pestanas += [(c, n) for c, n in OrdenTrabajo.Estado.choices]
-    pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
+    pagina = Paginator(qs.prefetch_related("tecnicos"), 50).get_page(request.GET.get("page"))
     return render(request, "trabajos/ordenes.html", {
         "pagina": pagina, "estado": estado, "q": q, "conteos": conteos,
         "pestanas": [(c, n, conteos.get(c, 0)) for c, n in pestanas], "gestiona": _gestiona(request),
@@ -157,6 +161,7 @@ def _guardar_orden(request, orden=None):
             if not o.pk:
                 o.creado_por = request.user
             o.save()
+            form.save_m2m()
             recursos.instance = o
             recursos.save()
         messages.success(request, f"Orden {o.numero} guardada.")
@@ -179,15 +184,16 @@ def orden_editar(request, pk):
 def orden(request, pk):
     o = get_object_or_404(OrdenTrabajo.objects.select_related("cliente", "proforma"), pk=pk)
     gestiona = _gestiona(request)
-    if not gestiona and not o.tareas.filter(tecnico=request.user).exists():
+    asignado = o.tecnicos.filter(pk=request.user.pk).exists()
+    if not gestiona and not asignado:
         raise Http404
     return render(request, "trabajos/orden.html", {
-        "o": o, "gestiona": gestiona,
+        "o": o, "gestiona": gestiona, "asignado": asignado,
         "materiales": o.recursos.filter(tipo=Recurso.Tipo.MATERIAL),
         "herramientas": o.recursos.filter(tipo=Recurso.Tipo.HERRAMIENTA),
-        "tareas": o.tareas.select_related("tecnico"),
-        "tarea_form": TareaForm(orden=o) if gestiona else None,
-        "hay_tecnicos": tecnicos().exists(),
+        "tecnicos_asignados": o.tecnicos.order_by("first_name", "username"),
+        "informes": o.informes.select_related("tecnico"),
+        "facturas": o.facturas.con_saldos() if gestiona and request.rol == ADMINISTRADOR else None,
         "estados": OrdenTrabajo.Estado.choices,
     })
 
@@ -206,89 +212,109 @@ def orden_estado(request, pk):
     return redirect(o)
 
 
-# ---------------------------------------------------------------- tareas
+# ---------------------------------------------------------------- informes (técnico)
 
 
-@requiere_rol(*GESTION)
-def asignar(request):
-    """Qué técnico hace qué orden: formulario de asignación + carga de trabajo de cada técnico."""
-    form = TareaForm(request.POST or None, initial={"orden": request.GET.get("orden")})
+@login_required
+def informes(request):
+    """«Generar informe»: el técnico reporta lo hecho en una de sus órdenes. Debajo, sus informes anteriores."""
+    form = InformeForm(request.POST or None, tecnico=request.user, initial={"orden": request.GET.get("orden")})
     if form.is_valid():
-        t = form.save(commit=False)
-        t.creado_por = request.user
-        t.save()
-        if t.orden.estado == OrdenTrabajo.Estado.PENDIENTE and t.orden.fecha_inicio and t.orden.fecha_inicio <= timezone.localdate():
-            t.orden.estado = OrdenTrabajo.Estado.EN_CURSO
-            t.orden.save(update_fields=["estado", "actualizado"])
-        nombre = t.tecnico.get_full_name() or t.tecnico.username
-        messages.success(request, f"{nombre} quedó asignado a {t.orden.numero}.")
-        destino = request.POST.get("volver")
-        return redirect(t.orden if destino == "orden" else "trabajos:asignar")
-    if request.method == "POST" and request.POST.get("volver") == "orden" and form.cleaned_data.get("orden"):
-        for e in form.errors.values():
-            messages.error(request, " ".join(e))
-        return redirect(form.cleaned_data["orden"])
-
-    abiertas = [Tarea.Estado.PENDIENTE, Tarea.Estado.EN_CURSO]
-    carga = tecnicos().annotate(
-        pendientes=Count("tareas", filter=Q(tareas__estado__in=abiertas)),
-        hechas=Count("tareas", filter=Q(tareas__estado=Tarea.Estado.HECHA)),
-    )
-    sin_tecnico = OrdenTrabajo.objects.filter(
-        estado__in=[OrdenTrabajo.Estado.PENDIENTE, OrdenTrabajo.Estado.EN_CURSO], tareas__isnull=True
-    ).select_related("cliente")
-    recientes = Tarea.objects.select_related("orden", "orden__cliente", "tecnico").filter(estado__in=abiertas).order_by("fecha_limite", "-creado")[:30]
-    return render(request, "trabajos/asignar.html", {
-        "form": form, "carga": carga, "sin_tecnico": sin_tecnico, "recientes": recientes, "hay_tecnicos": tecnicos().exists(),
+        with transaction.atomic():
+            inf = form.save(commit=False)
+            inf.tecnico = request.user
+            inf.creado_por = request.user
+            inf.save()
+            orden = inf.orden
+            nuevo = OrdenTrabajo.Estado.TERMINADA if inf.trabajo_terminado else OrdenTrabajo.Estado.EN_CURSO
+            if orden.estado != nuevo and orden.estado != OrdenTrabajo.Estado.TERMINADA:
+                orden.estado = nuevo
+                orden.save(update_fields=["estado", "actualizado"])
+        texto = f"Informe de {orden.numero} guardado."
+        if inf.trabajo_terminado:
+            texto += " La orden quedó como terminada."
+        messages.success(request, texto)
+        return redirect("trabajos:informes")
+    mios = Informe.objects.filter(tecnico=request.user).select_related("orden", "orden__cliente")[:30]
+    return render(request, "trabajos/informes.html", {
+        "form": form, "mios": mios, "hay_ordenes": form.fields["orden"].queryset.exists(),
     })
 
 
+# ---------------------------------------------------------------- técnicos (Manager)
+
+
 @requiere_rol(*GESTION)
-@require_POST
-def tarea_quitar(request, pk):
-    t = get_object_or_404(Tarea, pk=pk)
-    orden = t.orden
-    t.delete()
-    messages.success(request, "Asignación eliminada.")
-    return redirect(orden)
+def tecnicos_lista(request):
+    abiertas = [OrdenTrabajo.Estado.PENDIENTE, OrdenTrabajo.Estado.EN_CURSO]
+    inicio_mes = timezone.localdate().replace(day=1)
+    lista = (
+        tecnicos_y_desactivados()
+        .annotate(
+            abiertas=Count("ordenes_asignadas", filter=Q(ordenes_asignadas__estado__in=abiertas), distinct=True),
+            terminadas=Count("ordenes_asignadas", filter=Q(ordenes_asignadas__estado=OrdenTrabajo.Estado.TERMINADA), distinct=True),
+            informes_mes=Count("informes", filter=Q(informes__fecha__gte=inicio_mes), distinct=True),
+        )
+    )
+    from apps.clientes.views import conteos_directorio
+
+    return render(request, "trabajos/tecnicos.html", {"tecnicos": lista, **conteos_directorio()})
 
 
-@login_required
-def mis_tareas(request):
-    ver = request.GET.get("ver", "pendientes")
-    qs = Tarea.objects.filter(tecnico=request.user).select_related("orden", "orden__cliente")
-    if ver == "pendientes":
-        qs = qs.exclude(estado=Tarea.Estado.HECHA)
-    elif ver == "hechas":
-        qs = qs.filter(estado=Tarea.Estado.HECHA).order_by("-completada")
-    conteos = {
-        "pendientes": Tarea.objects.filter(tecnico=request.user).exclude(estado=Tarea.Estado.HECHA).count(),
-        "hechas": Tarea.objects.filter(tecnico=request.user, estado=Tarea.Estado.HECHA).count(),
-    }
-    tareas = list(qs)
-    for t in tareas:
-        t.form = AvanceTareaForm(instance=t, prefix=f"t{t.pk}")
-    return render(request, "trabajos/mis_tareas.html", {"tareas": tareas, "ver": ver, "conteos": conteos})
+def tecnicos_y_desactivados():
+    from django.contrib.auth import get_user_model
+
+    return get_user_model().objects.filter(groups__name=ROLES[TECNICO]).distinct().order_by("-is_active", "first_name", "username")
 
 
-@login_required
-@require_POST
-def tarea_avance(request, pk):
-    t = get_object_or_404(Tarea, pk=pk)
-    if t.tecnico != request.user and not _gestiona(request):
-        raise Http404
-    form = AvanceTareaForm(request.POST, instance=t, prefix=f"t{t.pk}")
+def _solo_tecnico(usuario):
+    """El Manager solo puede editar cuentas que sean únicamente de técnico (no administradores ni managers)."""
+    from apps.usuarios.roles import roles_de
+
+    return not usuario.is_superuser and roles_de(usuario) == [TECNICO]
+
+
+@requiere_rol(*GESTION)
+def tecnico_nuevo(request):
+    from apps.usuarios.forms import TecnicoForm
+    from apps.usuarios.roles import asignar_roles
+
+    form = TecnicoForm(request.POST or None, actor=request.user)
     if form.is_valid():
-        t = form.save(commit=False)
-        t.completada = timezone.now() if t.estado == Tarea.Estado.HECHA else None
-        t.save()
-        orden = t.orden
-        if t.estado != Tarea.Estado.PENDIENTE and orden.estado == OrdenTrabajo.Estado.PENDIENTE:
-            orden.estado = OrdenTrabajo.Estado.EN_CURSO
-            orden.save(update_fields=["estado", "actualizado"])
-        messages.success(request, f"Tarea de {orden.numero}: {t.get_estado_display().lower()}.")
-    else:
-        messages.error(request, "No se pudo guardar el avance.")
-    if request.POST.get("volver") == "orden":
-        return redirect(t.orden)
-    return redirect("trabajos:mis_tareas")
+        u = form.save(commit=False)
+        u.set_password(form.cleaned_data["password1"])
+        u.save()
+        asignar_roles(u, [TECNICO])
+        messages.success(request, f"Técnico «{u.username}» creado. Ya puede iniciar sesión.")
+        return redirect("trabajos:tecnicos")
+    return render(request, "trabajos/tecnico_form.html", {"form": form, "titulo": "Nuevo técnico"})
+
+
+@requiere_rol(*GESTION)
+def tecnico_editar(request, pk):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth import update_session_auth_hash
+
+    from apps.usuarios.forms import TecnicoForm
+
+    usuario = get_object_or_404(get_user_model(), pk=pk)
+    if not _solo_tecnico(usuario):
+        messages.error(request, "Esa cuenta tiene otros roles: se administra desde Usuarios.")
+        return redirect("trabajos:tecnicos")
+    form = TecnicoForm(request.POST or None, instance=usuario, actor=request.user)
+    if form.is_valid():
+        u = form.save(commit=False)
+        if "activo" in form.cleaned_data and u != request.user:
+            u.is_active = form.cleaned_data["activo"]
+        nueva = form.cleaned_data.get("password1")
+        if nueva:
+            u.set_password(nueva)
+        u.save()
+        if nueva and u == request.user:
+            update_session_auth_hash(request, u)
+        messages.success(request, f"Técnico «{u.username}» actualizado" + (" y contraseña cambiada." if nueva else "."))
+        return redirect("trabajos:tecnicos")
+    ordenes = usuario.ordenes_asignadas.select_related("cliente").order_by("-creado")[:20]
+    return render(request, "trabajos/tecnico_form.html", {
+        "form": form, "cuenta": usuario, "titulo": f"Técnico: {usuario.get_full_name() or usuario.username}", "ordenes": ordenes,
+    })

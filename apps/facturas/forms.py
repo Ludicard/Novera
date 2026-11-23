@@ -26,14 +26,44 @@ def siguiente_numero():
     return f"{serie}-{(max(secuenciales, default=0) + 1):09d}"
 
 
+def siguiente_recibo():
+    ultimo = 0
+    for n in Factura.objects.filter(numero__startswith="REC-").values_list("numero", flat=True):
+        if n[4:].isdigit():
+            ultimo = max(ultimo, int(n[4:]))
+    return f"REC-{ultimo + 1:05d}"
+
+
+class OrdenesWidget(forms.CheckboxSelectMultiple):
+    """Casillas de órdenes de trabajo con data-cliente (se muestran solo las del cliente elegido)."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        opcion = super().create_option(name, value, label, selected, index, subindex, attrs)
+        instancia = getattr(value, "instance", None)
+        if instancia is not None:
+            opcion["attrs"]["data-cliente"] = instancia.cliente_id
+        return opcion
+
+
+class OrdenesField(forms.ModelMultipleChoiceField):
+    widget = OrdenesWidget
+
+    def label_from_instance(self, o):
+        return f"{o.numero} · {o.titulo} ({o.get_estado_display().lower()})"
+
+
 class FacturaForm(forms.ModelForm):
     periodo = forms.DateField(widget=MES, input_formats=["%Y-%m", "%Y-%m-%d"])
     porcentaje_iva = forms.TypedChoiceField(label="% IVA", choices=TASAS_IVA, coerce=Decimal)
+    ordenes = OrdenesField(
+        queryset=None, required=False, label="Órdenes de trabajo que cobra",
+        help_text="Puedes incluir varias. Solo se muestran las del cliente elegido.",
+    )
 
     class Meta:
         model = Factura
         fields = [
-            "tipo", "numero", "cliente", "periodo", "fecha_emision", "dias_credito",
+            "tipo", "numero", "cliente", "ordenes", "periodo", "fecha_emision", "dias_credito",
             "fecha_cobro", "objeto", "subtotal", "porcentaje_iva", "notas",
         ]
         widgets = {
@@ -41,12 +71,25 @@ class FacturaForm(forms.ModelForm):
             "fecha_cobro": FECHA,
             "notas": forms.Textarea(attrs={"rows": 2}),
             "subtotal": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "tipo": forms.RadioSelect,
         }
-        help_texts = {"numero": "Si escribes solo el secuencial (ej. 676) se completa con la serie."}
+        help_texts = {
+            "numero": "Factura: el número del SRI (basta el secuencial, ej. 676). Vacío = el siguiente automático.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["cliente"].required = True
+        self.fields["numero"].required = False
+        from apps.trabajos.models import OrdenTrabajo
+
+        en_uso = self.instance.ordenes.all() if self.instance.pk else OrdenTrabajo.objects.none()
+        self.fields["ordenes"].queryset = (
+            OrdenTrabajo.objects.exclude(estado=OrdenTrabajo.Estado.CANCELADA) | en_uso
+        ).distinct().select_related("cliente").order_by("-creado")
+        self.fields["numero"].widget.attrs.update({
+            "data-siguiente-factura": siguiente_numero(), "data-siguiente-recibo": siguiente_recibo(),
+        })
         # Clientes activos, más el de la factura o el elegido de antemano aunque esté inactivo
         incluir = {getattr(self.instance, "cliente_id", None), getattr(self.initial.get("cliente"), "pk", None)}
         self.fields["cliente"].queryset = Cliente.objects.filter(Q(activo=True) | Q(pk__in=[x for x in incluir if x]))
@@ -63,8 +106,11 @@ class FacturaForm(forms.ModelForm):
             self.initial.setdefault("dias_credito", settings.NOVERA_DIAS_CREDITO_DEFECTO)
 
     def clean_numero(self):
-        numero = " ".join(self.cleaned_data["numero"].split())
-        if self.cleaned_data.get("tipo", Factura.Tipo.FACTURA) == Factura.Tipo.FACTURA and numero.isdigit():
+        numero = " ".join((self.cleaned_data.get("numero") or "").split())
+        tipo = self.cleaned_data.get("tipo", Factura.Tipo.FACTURA)
+        if not numero:
+            numero = siguiente_recibo() if tipo == Factura.Tipo.RECIBO else siguiente_numero()
+        if tipo == Factura.Tipo.FACTURA and numero.isdigit():
             numero = f"{settings.NOVERA_SERIE_FACTURA}-{int(numero):09d}"
         duplicada = Factura.objects.buscar_duplicado(numero, excluir=self.instance.pk)
         if duplicada:
@@ -76,6 +122,10 @@ class FacturaForm(forms.ModelForm):
         emision, cobro = datos.get("fecha_emision"), datos.get("fecha_cobro")
         if emision and cobro and cobro < emision:
             self.add_error("fecha_cobro", "La fecha de cobro no puede ser anterior a la emisión.")
+        cliente = datos.get("cliente")
+        ajenas = [o for o in (datos.get("ordenes") or []) if cliente and o.cliente_id != cliente.pk]
+        if ajenas:
+            self.add_error("ordenes", f"La orden {ajenas[0].numero} es de otro cliente.")
         subtotal, pct = datos.get("subtotal"), datos.get("porcentaje_iva")
         if self.instance.pk and subtotal is not None and pct is not None:
             total = redondear(subtotal + redondear(subtotal * pct / 100))
@@ -97,6 +147,7 @@ class FacturaForm(forms.ModelForm):
             factura.fecha_cobro = None  # se recalcula en save()
         if commit:
             factura.save()
+            self.save_m2m()
         return factura
 
 

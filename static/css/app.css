@@ -44,7 +44,7 @@ h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
 .inicio-cabecera { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
 .inicio-cabecera p { margin: 0 0 .2rem; }
 .mosaicos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-@media (min-width: 900px) { .mosaicos { grid-template-columns: repeat(4, 1fr); } .mosaicos .mosaico.ancho { grid-column: span 4; } }
+@media (min-width: 900px) { .mosaicos { grid-template-columns: repeat(4, 1fr); } .mosaicos .mosaico.ancho { grid-column: span 4; } .mosaicos.tres { grid-template-columns: repeat(3, 1fr); } }
 .mosaico { --acento: #4aa3df; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .8rem; text-align: center; min-height: 190px; padding: 1.3rem 1rem 1.5rem; border-radius: 16px; background: linear-gradient(160deg, #1d4a63, #143447); color: #fff; text-decoration: none; box-shadow: 0 6px 18px rgba(16, 40, 60, .18); overflow: hidden; transition: transform .12s ease, box-shadow .12s ease; }
 .mosaico::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--acento); }
 .mosaico:hover, .mosaico:focus-visible { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(16, 40, 60, .28); outline: none; }
@@ -69,7 +69,12 @@ a.accion-grande:hover { border-color: var(--primario); box-shadow: 0 4px 14px rg
 .nav-inferior { display: none; }
 
 /* --- Órdenes de trabajo */
-.campos-doc .descripcion, .campos-doc .notas, .campos-doc .responsabilidades { grid-column: 1 / -1; }
+.campos-doc .descripcion, .campos-doc .notas, .campos-doc .responsabilidades, .campos-doc .instrucciones,
+.campos-doc .tecnicos, .campos-doc .equipos, .campos-doc .trabajo_realizado, .campos-doc .materiales_usados,
+.campos-doc .observaciones, .campos-doc .trabajo_terminado, .factura-form .ordenes, .factura-form .tipo { grid-column: 1 / -1; }
+.campo.tecnicos ul, .campo.equipos ul, .campo.ordenes ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem 1rem; }
+.campo.tipo ul { flex-direction: row; gap: 1.5rem; }
+.campo .sin-opciones:empty { display: none; }
 .tabla-formset td { padding: .35rem .3rem; vertical-align: top; }
 .tabla-formset th { padding: .4rem .3rem; }
 .tabla-formset .col-descripcion { min-width: 240px; }
@@ -94,6 +99,7 @@ a.accion-grande:hover { border-color: var(--primario); box-shadow: 0 4px 14px rg
 .avance textarea { min-height: 2.5rem; }
 .fila-simple { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--borde); }
 .rojo-fondo { background: var(--rojo) !important; }
+.selector-chico { width: auto; max-width: 240px; height: 2.5rem; }
 .selector-estado label { display: flex; align-items: center; gap: .4rem; }
 .selector-estado select { width: auto; }
 @media print {

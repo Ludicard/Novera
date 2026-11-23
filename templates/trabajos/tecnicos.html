@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load trabajos %}
+{% block title %}Clientes y técnicos{% endblock %}
+{% block content %}
+{% include "clientes/_pestanas_directorio.html" with seccion="tecnicos" %}
+<div class="tarjeta sin-relleno desplazable">
+<table class="lista usuarios">
+  <thead><tr><th>Técnico</th><th>Usuario</th><th class="num">Órdenes abiertas</th><th class="num ocultar-movil">Terminadas</th><th class="num ocultar-movil">Informes este mes</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for t in tecnicos %}
+    <tr class="{% if not t.is_active %}inactiva{% endif %}">
+      <td><strong>{{ t|nombre }}</strong>{% if t.email %}<small class="tenue bloque">{{ t.email }}</small>{% endif %}</td>
+      <td>{{ t.username }}</td>
+      <td class="num">{% if t.abiertas %}<a href="{% url 'trabajos:tecnico_editar' t.pk %}">{{ t.abiertas }}</a>{% else %}0{% endif %}</td>
+      <td class="num ocultar-movil">{{ t.terminadas }}</td>
+      <td class="num ocultar-movil">{{ t.informes_mes }}</td>
+      <td>{% if t.is_active %}<span class="estado pagada">Activa</span>{% else %}<span class="estado anulada">Desactivada</span>{% endif %}</td>
+      <td class="acciones-col"><a class="boton chico" href="{% url 'trabajos:tecnico_editar' t.pk %}">Editar</a></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="vacio-tabla"><strong>Aún no hay técnicos.</strong><a href="{% url 'trabajos:tecnico_nuevo' %}">Crea el primero</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

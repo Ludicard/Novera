@@ -3,11 +3,11 @@
 {% block content %}
 <div class="encabezado">
   <div><h1>{% if gestiona %}Órdenes de trabajo{% else %}Mis órdenes de trabajo{% endif %}</h1>
-    <span class="tenue">{% if gestiona %}Del trabajo cotizado al terminado{% else %}Órdenes en las que tienes tareas{% endif %}</span></div>
+    <span class="tenue">{% if gestiona %}Del trabajo cotizado al terminado{% else %}Órdenes en las que estás asignado{% endif %}</span></div>
   {% if gestiona %}
   <div class="acciones-encabezado">
     <a class="boton" href="{% url 'trabajos:proformas' %}">Proformas</a>
-    <a class="boton" href="{% url 'trabajos:asignar' %}">Asignar tareas</a>
+    <a class="boton" href="{% url 'trabajos:tecnicos' %}">Técnicos</a>
     <a class="boton primario" href="{% url 'trabajos:orden_nueva' %}">+ Nueva orden</a>
   </div>
   {% endif %}
@@ -24,7 +24,7 @@
 </form>
 <div class="tarjeta sin-relleno desplazable">
 <table class="lista facturas">
-  <thead><tr><th>Orden</th><th>Trabajo</th><th class="ocultar-movil">Fechas</th><th class="num ocultar-movil">Horas</th><th>Técnicos</th><th>Estado</th></tr></thead>
+  <thead><tr><th>Orden</th><th>Trabajo</th><th class="ocultar-movil">Fechas</th><th class="num ocultar-movil">Horas</th><th>Técnicos</th><th class="num ocultar-movil">Informes</th><th>Estado</th></tr></thead>
   <tbody>
   {% for o in pagina %}
     <tr class="fila" data-url="{{ o.get_absolute_url }}" onclick="if(!event.target.closest('a'))location=this.dataset.url">
@@ -33,11 +33,12 @@
       <td class="nowrap ocultar-movil">{{ o.fecha_inicio|date:"d/m"|default:"—" }} → {{ o.fecha_fin|date:"d/m/Y"|default:"—" }}
         {% if o.atrasada %}<small class="bloque rojo">atrasada</small>{% endif %}</td>
       <td class="num ocultar-movil">{{ o.horas_estimadas|floatformat:"-1"|default:"—" }}</td>
-      <td>{% if o.n_tareas %}{{ o.n_hechas }}/{{ o.n_tareas }} hechas{% else %}<span class="rojo">Sin técnico</span>{% endif %}</td>
+      <td>{% for t in o.tecnicos.all %}{{ t|nombre }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="rojo">Sin técnico</span>{% endfor %}</td>
+      <td class="num ocultar-movil">{{ o.n_informes }}</td>
       <td>{% insignia o %}</td>
     </tr>
   {% empty %}
-    <tr><td colspan="6" class="vacio-tabla"><strong>No hay órdenes{% if q %} que coincidan{% endif %}.</strong>
+    <tr><td colspan="7" class="vacio-tabla"><strong>No hay órdenes{% if q %} que coincidan{% endif %}.</strong>
       {% if gestiona %}<a href="{% url 'trabajos:orden_nueva' %}">Crear una orden</a> o <a href="{% url 'trabajos:proforma_nueva' %}">empezar por una proforma</a>.{% endif %}</td></tr>
   {% endfor %}
   </tbody>

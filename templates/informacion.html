@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% load trabajos %}
+{% block title %}Información general{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'inicio' %}">← Inicio</a>
+<div class="encabezado"><div><h1>Información general</h1><span class="tenue">Órdenes de trabajo, proformas, técnicos y equipos al {{ hoy|date:"j \d\e F" }}</span></div></div>
+
+<section class="kpis seis">
+  <a class="kpi azul" href="{% url 'trabajos:ordenes' %}"><span>Órdenes abiertas</span><strong>{{ kpis.abiertas }}</strong><small>{{ kpis.terminadas_mes }} terminada{{ kpis.terminadas_mes|pluralize }} este mes</small></a>
+  <a class="kpi alerta" href="{% url 'trabajos:ordenes' %}"><span>Atrasadas</span><strong>{{ kpis.atrasadas }}</strong><small>pasaron su fecha de finalización</small></a>
+  <a class="kpi alerta" href="{% url 'trabajos:ordenes' %}?estado=sin_tecnico"><span>Sin técnico</span><strong>{{ kpis.sin_tecnico }}</strong><small>órdenes abiertas sin asignar</small></a>
+  <a class="kpi verde" href="{% url 'trabajos:proformas' %}"><span>Proformas por responder</span><strong>{{ kpis.pf_por_responder }}</strong><small>{{ kpis.pf_mes }} nueva{{ kpis.pf_mes|pluralize }} este mes{% if kpis.tasa_aprobacion is not None %} · {{ kpis.tasa_aprobacion }} % aprobadas{% endif %}</small></a>
+  <a class="kpi neutro" href="{% url 'clientes:lista' %}"><span>Clientes activos</span><strong>{{ kpis.clientes }}</strong><small>{{ kpis.equipos }} equipo{{ kpis.equipos|pluralize }} en servicio</small></a>
+  <a class="kpi neutro" href="{% url 'trabajos:tecnicos' %}"><span>Informes este mes</span><strong>{{ kpis.informes_mes }}</strong><small>de los técnicos</small></a>
+</section>
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <h2>Órdenes atrasadas</h2>
+    {% for o in atrasadas %}<div class="fila-simple"><div><a class="numero" href="{{ o.get_absolute_url }}">{{ o.numero }}</a> {{ o.titulo }}<small class="tenue bloque">{{ o.cliente }}</small></div><span class="rojo nowrap">{{ o.fecha_fin|date:"d/m/Y" }}</span></div>
+    {% empty %}<p class="tenue">Ninguna orden atrasada. 👍</p>{% endfor %}
+  </section>
+  <section class="tarjeta">
+    <h2>Próximas a terminar</h2>
+    {% for o in proximas %}<div class="fila-simple"><div><a class="numero" href="{{ o.get_absolute_url }}">{{ o.numero }}</a> {{ o.titulo }}<small class="tenue bloque">{{ o.cliente }}</small></div><span class="nowrap">{{ o.fecha_fin|date:"d/m/Y" }}</span></div>
+    {% empty %}<p class="tenue">Sin órdenes con fecha de finalización próxima.</p>{% endfor %}
+  </section>
+  <section class="tarjeta">
+    <h2>Carga de los técnicos</h2>
+    {% for t in carga %}<div class="fila-simple"><span>{{ t|nombre }}</span><span><b>{{ t.abiertas }}</b> abierta{{ t.abiertas|pluralize }} <small class="tenue">· {{ t.informes_mes }} informe{{ t.informes_mes|pluralize }} este mes</small></span></div>
+    {% empty %}<p class="tenue">Aún no hay técnicos. <a href="{% url 'trabajos:tecnico_nuevo' %}">Crear uno</a>.</p>{% endfor %}
+  </section>
+  <section class="tarjeta">
+    <h2>Últimos informes</h2>
+    {% for i in ultimos_informes %}<div class="fila-simple"><div><a class="numero" href="{{ i.orden.get_absolute_url }}">{{ i.orden.numero }}</a> {{ i.tecnico|nombre }}{% if i.trabajo_terminado %} <span class="estado pagada">terminado</span>{% endif %}<small class="tenue bloque recorte">{{ i.trabajo_realizado|truncatechars:80 }}</small></div><span class="tenue nowrap">{{ i.fecha|date:"d/m" }}</span></div>
+    {% empty %}<p class="tenue">Todavía no hay informes.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

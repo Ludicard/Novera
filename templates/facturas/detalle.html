@@ -34,6 +34,7 @@
       <dt>Emisión</dt><dd>{{ factura.fecha_emision|date:"d/m/Y" }}</dd>
       <dt>Crédito</dt><dd>{{ factura.dias_credito }} días</dd>
       <dt>Fecha de cobro</dt><dd>{{ factura.fecha_cobro|date:"d/m/Y"|default:"—" }}</dd>
+      {% with ots=factura.ordenes.all %}{% if ots %}<dt>Órdenes de trabajo</dt><dd>{% for o in ots %}<a href="{{ o.get_absolute_url }}">{{ o.numero }}</a> {{ o.titulo }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}{% endwith %}
       {% if factura.clave_acceso %}<dt>Clave de acceso</dt><dd class="clave">{{ factura.clave_acceso }}</dd>{% endif %}
       {% if factura.cliente.identificacion %}<dt>RUC / Cédula</dt><dd>{{ factura.cliente.identificacion }}</dd>{% endif %}
       {% if factura.notas %}<dt>Notas</dt><dd class="pre">{{ factura.notas }}</dd>{% endif %}

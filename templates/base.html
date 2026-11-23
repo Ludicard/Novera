@@ -15,20 +15,27 @@
     {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
     <a href="{% url 'inicio' %}" {% if u == 'inicio' %}class="activo"{% endif %}>Inicio</a>
     {% if rol == "tecnico" %}
-    <a href="{% url 'trabajos:mis_tareas' %}" {% if u == 'mis_tareas' %}class="activo"{% endif %}>Mis tareas</a>
-    <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' and u != 'mis_tareas' %}class="activo"{% endif %}>Órdenes</a>
+    <a href="{% url 'trabajos:ordenes' %}" {% if u == 'ordenes' or u == 'orden' %}class="activo"{% endif %}>Mis órdenes</a>
+    <a href="{% url 'trabajos:informes' %}" {% if u == 'informes' %}class="activo"{% endif %}>Informes</a>
+    {% elif rol == "manager" %}
+    <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' and 'equipo' not in u or 'tecnico' in u %}class="activo"{% endif %}>Clientes y técnicos</a>
+    <a href="{% url 'clientes:equipos' %}" {% if 'equipo' in u %}class="activo"{% endif %}>Equipos</a>
+    <a href="{% url 'trabajos:proformas' %}" {% if 'proforma' in u %}class="activo"{% endif %}>Proformas</a>
+    <a href="{% url 'trabajos:ordenes' %}" {% if 'orden' in u %}class="activo"{% endif %}>Órdenes</a>
+    <a href="{% url 'informacion' %}" {% if u == 'informacion' %}class="activo"{% endif %}>Información</a>
     {% else %}
-    <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' %}class="activo"{% endif %}>Órdenes</a>
-    <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
+    <a href="{% url 'trabajos:proformas' %}" {% if 'proforma' in u %}class="activo"{% endif %}>Proformas</a>
+    <a href="{% url 'trabajos:ordenes' %}" {% if 'orden' in u %}class="activo"{% endif %}>Órdenes</a>
     <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' or u == 'finanzas' %}class="activo"{% endif %}>Facturas</a>
-    <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Panel</a>
-    {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}" {% if ns == 'usuarios' and u != 'elegir_rol' %}class="activo"{% endif %}>Usuarios</a>{% endif %}
+    <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}>Clientes</a>
+    <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}>Finanzas</a>
+    <a href="{% url 'usuarios:lista' %}" {% if ns == 'usuarios' and u != 'elegir_rol' %}class="activo"{% endif %}>Usuarios</a>
     {% endif %}
     {% endwith %}
   </nav>
   {% else %}<span class="espaciador"></span>{% endif %}
   <div class="usuario">
-    {% if rol == "administrador" or rol == "manager" %}<a class="boton primario solo-escritorio" href="{% url 'trabajos:orden_nueva' %}">+ Orden de trabajo</a>{% endif %}
+    {% if rol == "administrador" or rol == "manager" %}<a class="boton primario solo-escritorio" href="{% url 'trabajos:orden_nueva' %}">+ Orden de trabajo</a>{% elif rol == "tecnico" %}<a class="boton primario solo-escritorio" href="{% url 'trabajos:informes' %}">+ Informe</a>{% endif %}
     <details class="menu-usuario">
       <summary class="rol-actual {{ rol }}" aria-label="Menú de la cuenta">
         {% if rol %}<span class="rol-mini">{% include "usuarios/_icono_rol.html" with clave=rol %}</span>{% endif %}
@@ -51,12 +58,16 @@
   {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
   <a href="{% url 'inicio' %}" {% if u == 'inicio' %}class="activo"{% endif %}><span aria-hidden="true">⌂</span>Inicio</a>
   {% if rol == "tecnico" %}
-  <a href="{% url 'trabajos:mis_tareas' %}" {% if u == 'mis_tareas' %}class="activo"{% endif %}><span aria-hidden="true">✓</span>Mis tareas</a>
-  <a href="{% url 'trabajos:ordenes' %}" {% if ns == 'trabajos' and u != 'mis_tareas' %}class="activo"{% endif %}><span aria-hidden="true">☰</span>Órdenes</a>
+  <a href="{% url 'trabajos:ordenes' %}" {% if u == 'ordenes' or u == 'orden' %}class="activo"{% endif %}><span aria-hidden="true">☰</span>Órdenes</a>
+  <a href="{% url 'trabajos:informes' %}" {% if u == 'informes' %}class="activo"{% endif %}><span aria-hidden="true">✎</span>Informe</a>
+  {% elif rol == "manager" %}
+  <a href="{% url 'trabajos:ordenes' %}" {% if 'orden' in u %}class="activo"{% endif %}><span aria-hidden="true">☰</span>Órdenes</a>
+  <a href="{% url 'clientes:lista' %}" {% if ns == 'clientes' %}class="activo"{% endif %}><span aria-hidden="true">☺</span>Clientes</a>
+  <a href="{% url 'informacion' %}" {% if u == 'informacion' %}class="activo"{% endif %}><span aria-hidden="true">▥</span>Resumen</a>
   {% else %}
-  <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}><span aria-hidden="true">▥</span>Reportes</a>
-  <a href="{% url 'trabajos:asignar' %}" {% if u == 'asignar' %}class="activo"{% endif %}><span aria-hidden="true">⚒</span>Tareas</a>
+  <a href="{% url 'trabajos:ordenes' %}" {% if 'orden' in u %}class="activo"{% endif %}><span aria-hidden="true">☰</span>Órdenes</a>
   <a href="{% url 'facturas:lista' %}" {% if ns == 'facturas' or u == 'finanzas' %}class="activo"{% endif %}><span aria-hidden="true">$</span>Facturas</a>
+  <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}class="activo"{% endif %}><span aria-hidden="true">▥</span>Finanzas</a>
   {% endif %}
   {% endwith %}
 </nav>

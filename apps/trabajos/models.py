@@ -1,7 +1,8 @@
-"""Proformas (cotizaciones), órdenes de trabajo y tareas asignadas a técnicos.
+"""Proformas (cotizaciones), órdenes de trabajo e informes de los técnicos.
 
 Flujo: Proforma (borrador → enviada → aprobada/rechazada) → al aprobarse se genera la Orden de trabajo,
-que lleva materiales, herramientas, horas estimadas y fechas. Las tareas asignan técnicos a una orden.
+que lleva técnicos asignados, instrucciones, materiales, herramientas, horas estimadas y fechas.
+Los técnicos trabajan solo por órdenes de trabajo y reportan con Informes. Una factura puede incluir varias órdenes.
 """
 
 from decimal import Decimal
@@ -127,6 +128,15 @@ class OrdenTrabajo(Auditoria):
     titulo = models.CharField("Trabajo a realizar", max_length=200)
     descripcion = models.TextField("Detalle", blank=True)
     ubicacion = models.CharField("Lugar / dirección", max_length=255, blank=True)
+    equipos = models.ManyToManyField(
+        "clientes.Equipo", blank=True, related_name="ordenes", verbose_name="Equipos", help_text="Equipos del cliente en los que se trabaja."
+    )
+    tecnicos = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="ordenes_asignadas", verbose_name="Técnicos asignados"
+    )
+    instrucciones = models.TextField(
+        "Instrucciones y responsabilidades", blank=True, help_text="Qué debe hacer cada técnico en esta orden."
+    )
     horas_estimadas = models.DecimalField("Horas estimadas", max_digits=7, decimal_places=1, null=True, blank=True)
     fecha_inicio = models.DateField("Fecha de inicio", null=True, blank=True)
     fecha_fin = models.DateField("Fecha de finalización", null=True, blank=True)
@@ -188,29 +198,20 @@ class Recurso(models.Model):
         ordering = ["tipo", "pk"]
 
 
-class Tarea(Auditoria):
-    """Asignación de un técnico a una orden de trabajo, con sus responsabilidades."""
+class Informe(Auditoria):
+    """Informe de trabajo que el técnico genera sobre una orden."""
 
-    class Estado(models.TextChoices):
-        PENDIENTE = "PENDIENTE", "Pendiente"
-        EN_CURSO = "EN_CURSO", "En curso"
-        HECHA = "HECHA", "Hecha"
-
-    orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name="tareas")
-    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="tareas")
-    responsabilidades = models.TextField(help_text="Qué debe hacer este técnico en la orden.")
-    fecha_limite = models.DateField("Fecha límite", null=True, blank=True)
-    horas_estimadas = models.DecimalField("Horas estimadas", max_digits=6, decimal_places=1, null=True, blank=True)
-    estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
-    completada = models.DateTimeField(null=True, blank=True)
-    comentario = models.TextField("Comentario del técnico", blank=True)
+    orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name="informes")
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="informes")
+    fecha = models.DateField(default=timezone.localdate)
+    horas_trabajadas = models.DecimalField("Horas trabajadas", max_digits=6, decimal_places=1, null=True, blank=True)
+    trabajo_realizado = models.TextField("Trabajo realizado")
+    materiales_usados = models.TextField("Materiales usados", blank=True)
+    observaciones = models.TextField("Observaciones / pendientes", blank=True)
+    trabajo_terminado = models.BooleanField("El trabajo de la orden quedó terminado", default=False)
 
     class Meta:
-        ordering = ["estado", "fecha_limite", "pk"]
+        ordering = ["-fecha", "-creado"]
 
     def __str__(self):
-        return f"{self.orden.numero} · {self.tecnico}"
-
-    @property
-    def atrasada(self):
-        return self.fecha_limite is not None and self.fecha_limite < timezone.localdate() and self.estado != self.Estado.HECHA
+        return f"Informe {self.orden.numero} · {self.fecha:%d/%m/%Y}"

@@ -1,27 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Datos financieros{% endblock %}
+{% block title %}Cargar pagos{% endblock %}
 {% block content %}
 <a class="volver" href="{% url 'inicio' %}">← Inicio</a>
-<div class="encabezado"><div><h1>Cargar datos financieros</h1><span class="tenue">Facturas, cobros y reportes de FactureroMovil</span></div></div>
+<div class="encabezado"><div><h1>Cargar pagos</h1><span class="tenue">Cobros, abonos y retenciones de las facturas</span></div></div>
 <div class="acciones-grandes">
-  <a class="accion-grande" href="{% url 'facturas:importar' %}">
-    <strong>⤒ Importar de FactureroMovil</strong>
-    <small>Sube el «Reporte de Factura» en Excel. Lo ya cargado se salta solo.{% if ultima_importada %} Última importación: {{ ultima_importada|date:"d/m/Y" }}.{% endif %}</small>
-  </a>
-  <a class="accion-grande" href="{% url 'facturas:nueva' %}">
-    <strong>+ Registrar una factura</strong>
-    <small>Para una factura que no venga del reporte.</small>
-  </a>
   <a class="accion-grande" href="{% url 'facturas:lista' %}?estado=ABIERTAS">
-    <strong>$ Registrar pagos y abonos</strong>
-    <small>{{ n_por_cobrar }} factura{{ n_por_cobrar|pluralize }} por cobrar{% if n_vencidas %} · <span class="rojo">{{ n_vencidas }} vencida{{ n_vencidas|pluralize }}</span>{% endif %}. Usa «Cobrar» en cada fila o selecciona varias.</small>
+    <strong>$ Registrar un pago o abono</strong>
+    <small>{{ n_por_cobrar }} factura{{ n_por_cobrar|pluralize }} por cobrar{% if n_vencidas %} · <span class="rojo">{{ n_vencidas }} vencida{{ n_vencidas|pluralize }}</span>{% endif %}. Busca la factura y pulsa «Cobrar».</small>
   </a>
-  <a class="accion-grande" href="{% url 'facturas:lista' %}">
-    <strong>☰ Todas las facturas</strong>
-    <small>Buscar, filtrar, exportar a Excel.</small>
+  <a class="accion-grande" href="{% url 'facturas:lista' %}?estado=VENCIDA">
+    <strong>✓ Marcar varias como cobradas</strong>
+    <small>Selecciona varias facturas (o todas las filtradas) y regístralas de una vez, con la fecha de cada vencimiento si quieres.</small>
+  </a>
+  <a class="accion-grande" href="{% url 'facturas:importar' %}">
+    <strong>⤒ Importar cobros de FactureroMovil</strong>
+    <small>Sube el «Reporte de Factura»: trae las facturas nuevas y actualiza los cobros que FactureroMovil tenga registrados.{% if ultima_importada %} Última importación: {{ ultima_importada|date:"d/m/Y" }}.{% endif %}</small>
   </a>
   <div class="accion-grande proximamente">
-    <strong>Recibos y notas de crédito</strong>
+    <strong>Notas de crédito</strong>
     <small>Próximamente.</small>
   </div>
 </div>

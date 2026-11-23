@@ -72,3 +72,38 @@ class Cliente(models.Model):
     @property
     def tipo_identificacion(self):
         return {10: "Cédula", 13: "RUC"}.get(len(self.identificacion), "")
+
+
+class Equipo(models.Model):
+    """Equipo instalado en un cliente (ascensor, montacargas…), con su historial de órdenes de trabajo."""
+
+    class Tipo(models.TextChoices):
+        ASCENSOR = "ASCENSOR", "Ascensor"
+        MONTACARGAS = "MONTACARGAS", "Montacargas"
+        ESCALERA = "ESCALERA", "Escalera eléctrica"
+        PLATAFORMA = "PLATAFORMA", "Plataforma / salvaescaleras"
+        OTRO = "OTRO", "Otro"
+
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="equipos")
+    tipo = models.CharField(max_length=12, choices=Tipo.choices, default=Tipo.ASCENSOR)
+    nombre = models.CharField("Nombre / identificación", max_length=120, help_text="Cómo lo identifica el cliente: «Ascensor 2 – Torre Sur».")
+    marca = models.CharField(max_length=80, blank=True)
+    modelo = models.CharField(max_length=80, blank=True)
+    numero_serie = models.CharField("Nº de serie", max_length=80, blank=True)
+    ubicacion = models.CharField("Ubicación", max_length=200, blank=True, help_text="Torre, bloque, piso…")
+    capacidad = models.CharField(max_length=60, blank=True, help_text="Ej.: 8 personas / 630 kg, 6 paradas")
+    fecha_instalacion = models.DateField("Fecha de instalación", null=True, blank=True)
+    activo = models.BooleanField(default=True, help_text="Desmarca si se retiró o ya no se le da servicio.")
+    notas = models.TextField(blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["cliente__nombre", "nombre"]
+        constraints = [models.UniqueConstraint(fields=["cliente", "nombre"], name="equipo_nombre_unico_por_cliente")]
+
+    def __str__(self):
+        return f"{self.nombre} · {self.cliente}"
+
+    def get_absolute_url(self):
+        return reverse("clientes:equipo", args=[self.pk])

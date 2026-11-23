@@ -2,7 +2,7 @@
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
 <div class="encabezado">
-  <h1>{{ titulo }}</h1>
+  <div><h1>{{ titulo }}</h1>{% if not factura %}<span class="tenue">¿Ya la emitiste en FactureroMovil? <a href="{% url 'facturas:importar' %}">Importa el reporte</a> y se carga sola.</span>{% endif %}</div>
   <a href="{% if factura %}{{ factura.get_absolute_url }}{% else %}{% url 'facturas:lista' %}{% endif %}">Cancelar</a>
 </div>
 <form method="post" class="tarjeta formulario factura-form" id="factura-form">
@@ -40,4 +40,4 @@
 </dialog>
 {{ dias_clientes|json_script:"dias-clientes" }}
 {% endblock %}
-{% block scripts %}<script src="{% static 'js/factura_form.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/factura_form.js' %}"></script><script src="{% static 'js/filtrar_por_cliente.js' %}"></script>{% endblock %}

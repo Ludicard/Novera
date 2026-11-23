@@ -18,4 +18,4 @@
     <a href="{% if orden %}{{ orden.get_absolute_url }}{% else %}{% url 'trabajos:ordenes' %}{% endif %}">Cancelar</a></div>
 </form>
 {% endblock %}
-{% block scripts %}<script src="{% static 'js/formset.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/formset.js' %}"></script><script src="{% static 'js/filtrar_por_cliente.js' %}"></script>{% endblock %}

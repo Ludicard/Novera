@@ -65,4 +65,15 @@
       dlg.close();
     });
   }
+
+  // Factura o recibo: si el número es el sugerido, cambia al siguiente del otro tipo
+  const numero = $("numero");
+  form.querySelectorAll('input[name="tipo"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const sigF = numero.dataset.siguienteFactura, sigR = numero.dataset.siguienteRecibo;
+      if (!numero.value || numero.value === sigF || numero.value === sigR) {
+        numero.value = radio.value === "RECIBO" ? sigR : sigF;
+      }
+    });
+  });
 })();

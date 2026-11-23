@@ -58,10 +58,10 @@ class SeleccionDeRolTests(TestCase):
     def test_sin_elegir_no_entra_y_luego_vuelve_a_donde_iba(self):
         asignar_roles(self.u, [MANAGER])
         self.client.force_login(self.u)
-        r = self.client.get(reverse("facturas:lista") + "?estado=VENCIDA")
-        self.assertRedirects(r, self.elegir + "?siguiente=%2Ffacturas%2F%3Festado%3DVENCIDA")
-        r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": "/facturas/?estado=VENCIDA"})
-        self.assertRedirects(r, "/facturas/?estado=VENCIDA")
+        r = self.client.get(reverse("trabajos:ordenes") + "?estado=EN_CURSO")
+        self.assertRedirects(r, self.elegir + "?siguiente=%2Ftrabajos%2Fordenes%2F%3Festado%3DEN_CURSO")
+        r = self.client.post(self.elegir, {"rol": MANAGER, "siguiente": "/trabajos/ordenes/?estado=EN_CURSO"})
+        self.assertRedirects(r, "/trabajos/ordenes/?estado=EN_CURSO")
 
     def test_post_sin_rol_vuelve_a_la_pagina_del_formulario(self):
         asignar_roles(self.u, [MANAGER])

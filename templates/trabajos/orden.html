@@ -4,8 +4,9 @@
 <a class="volver" href="{% url 'trabajos:ordenes' %}">← Órdenes de trabajo</a>
 <div class="encabezado">
   <div><span class="tenue">Orden de trabajo · {{ o.cliente }}</span><h1>{{ o.numero }} {% insignia o %}</h1></div>
-  {% if gestiona %}
   <div class="acciones-encabezado">
+    {% if asignado and o.estado != "TERMINADA" and o.estado != "CANCELADA" %}<a class="boton primario" href="{% url 'trabajos:informes' %}?orden={{ o.pk }}">+ Generar informe</a>{% endif %}
+    {% if gestiona %}
     <form method="post" action="{% url 'trabajos:orden_estado' o.pk %}" class="en-linea selector-estado">
       {% csrf_token %}
       <label class="tenue">Estado
@@ -14,8 +15,9 @@
       <noscript><button class="boton chico">Cambiar</button></noscript>
     </form>
     <a class="boton" href="{% url 'trabajos:orden_editar' o.pk %}">Editar</a>
+    {% if rol == "administrador" %}<a class="boton" href="{% url 'facturas:nueva' %}?orden={{ o.pk }}">Facturar</a>{% endif %}
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <div class="rejilla panel">
@@ -30,56 +32,45 @@
       <dt>Horas estimadas</dt><dd>{{ o.horas_estimadas|floatformat:"-1"|default:"Por definir" }}</dd>
       {% if gestiona and o.proforma %}<dt>Proforma</dt><dd><a href="{{ o.proforma.get_absolute_url }}">{{ o.proforma.numero }}</a> · {{ o.proforma.total|dinero }}</dd>{% endif %}
     </dl>
+    {% if o.equipos.exists %}
+    <h3>Equipos</h3>
+    <ul class="lista-recursos">{% for e in o.equipos.all %}<li><span>{% if gestiona %}<a href="{{ e.get_absolute_url }}">{{ e.nombre }}</a>{% else %}{{ e.nombre }}{% endif %}<small class="tenue bloque">{{ e.get_tipo_display }}{% if e.marca %} · {{ e.marca }} {{ e.modelo }}{% endif %}{% if e.ubicacion %} · {{ e.ubicacion }}{% endif %}</small></span>{% if e.numero_serie %}<b class="tenue">Serie {{ e.numero_serie }}</b>{% endif %}</li>{% endfor %}</ul>
+    {% endif %}
     {% if o.descripcion %}<h3>Detalle</h3><p class="pre">{{ o.descripcion }}</p>{% endif %}
-    {% if o.notas %}<h3>Notas</h3><p class="pre tenue">{{ o.notas }}</p>{% endif %}
+    {% if o.notas and gestiona %}<h3>Notas</h3><p class="pre tenue">{{ o.notas }}</p>{% endif %}
   </section>
   <section class="tarjeta">
-    <h2>Materiales</h2>
+    <h2>Técnicos</h2>
+    {% if tecnicos_asignados %}<div class="roles-insignias">{% for t in tecnicos_asignados %}<span class="rol-insignia tecnico"><span class="rol-icono mini">{% include "usuarios/_icono_rol.html" with clave="tecnico" %}</span>{{ t|nombre }}{% if t == user %} (tú){% endif %}</span>{% endfor %}</div>
+    {% else %}<p class="rojo">Sin técnico asignado.{% if gestiona %} <a href="{% url 'trabajos:orden_editar' o.pk %}">Asignar</a>{% endif %}</p>{% endif %}
+    {% if o.instrucciones %}<h3>Instrucciones y responsabilidades</h3><p class="pre">{{ o.instrucciones }}</p>{% endif %}
+    <h2 class="seccion-chica">Materiales</h2>
     {% if materiales %}<ul class="lista-recursos">{% for r in materiales %}<li><span>{{ r.descripcion }}</span><b>{{ r.cantidad|floatformat:"-2" }} {{ r.unidad }}</b></li>{% endfor %}</ul>
     {% else %}<p class="tenue">Sin materiales.</p>{% endif %}
     <h2 class="seccion-chica">Herramientas</h2>
     {% if herramientas %}<ul class="lista-recursos">{% for r in herramientas %}<li><span>{{ r.descripcion }}</span><b>{{ r.cantidad|floatformat:"-2" }} {{ r.unidad }}</b></li>{% endfor %}</ul>
     {% else %}<p class="tenue">Sin herramientas.</p>{% endif %}
-    {% if gestiona %}<a class="enlace" href="{% url 'trabajos:orden_editar' o.pk %}">Editar materiales y herramientas</a>{% endif %}
   </section>
 </div>
 
 <section class="tarjeta">
-  <h2>Técnicos y responsabilidades</h2>
-  {% if tareas %}
-  <div class="tareas">
-    {% for t in tareas %}
-    <div class="tarea {% if t.tecnico == user %}mia{% endif %}">
-      <div class="tarea-cab">
-        <strong>{{ t.tecnico|nombre }}{% if t.tecnico == user %} (tú){% endif %}</strong>
-        {% insignia t %}
-        {% if t.fecha_limite %}<small class="{% if t.atrasada %}rojo{% else %}tenue{% endif %}">hasta {{ t.fecha_limite|date:"d/m/Y" }}</small>{% endif %}
-        {% if t.horas_estimadas %}<small class="tenue">{{ t.horas_estimadas|floatformat:"-1" }} h</small>{% endif %}
-      </div>
-      <p class="pre">{{ t.responsabilidades }}</p>
-      {% if t.comentario %}<p class="comentario">💬 {{ t.comentario }}</p>{% endif %}
-      {% if gestiona %}
-      <form method="post" action="{% url 'trabajos:tarea_quitar' t.pk %}" onsubmit="return confirm('¿Quitar a {{ t.tecnico|nombre|escapejs }} de esta orden?')">
-        {% csrf_token %}<button class="enlace rojo">Quitar asignación</button>
-      </form>
-      {% elif t.tecnico == user %}
-      <a class="boton chico" href="{% url 'trabajos:mis_tareas' %}">Actualizar mi avance</a>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}<p class="tenue">Aún no hay técnicos asignados.</p>{% endif %}
-
-  {% if gestiona and o.estado != "TERMINADA" and o.estado != "CANCELADA" %}
-  <h3>Asignar un técnico</h3>
-  {% if hay_tecnicos %}
-  <form method="post" action="{% url 'trabajos:asignar' %}" class="formulario">
-    {% csrf_token %}
-    <input type="hidden" name="volver" value="orden">
-    <div class="campos campos-doc">{% with form=tarea_form %}{% include "_campos.html" %}{% endwith %}</div>
-    <div class="acciones"><button class="boton primario">Asignar</button></div>
-  </form>
-  {% else %}<p class="mensaje warning">No hay cuentas con el rol Técnico. {% if rol == "administrador" %}<a href="{% url 'usuarios:nueva' %}">Crea una en Usuarios</a>.{% endif %}</p>{% endif %}
-  {% endif %}
+  <h2>Informes de los técnicos</h2>
+  {% for i in informes %}
+  <article class="tarea {% if i.tecnico == user %}mia{% endif %}">
+    <div class="tarea-cab"><strong>{{ i.tecnico|nombre }}</strong><small class="tenue">{{ i.fecha|date:"d/m/Y" }}{% if i.horas_trabajadas %} · {{ i.horas_trabajadas|floatformat:"-1" }} h{% endif %}</small>
+      {% if i.trabajo_terminado %}<span class="estado pagada">Trabajo terminado</span>{% endif %}</div>
+    <p class="pre">{{ i.trabajo_realizado }}</p>
+    {% if i.materiales_usados %}<p class="tenue"><b>Materiales:</b> {{ i.materiales_usados }}</p>{% endif %}
+    {% if i.observaciones %}<p class="comentario">💬 {{ i.observaciones }}</p>{% endif %}
+  </article>
+  {% empty %}<p class="tenue">Aún no hay informes de esta orden.</p>{% endfor %}
 </section>
+
+{% if facturas is not None %}
+<section class="tarjeta">
+  <h2>Facturas de esta orden</h2>
+  {% for f in facturas %}<div class="fila-simple"><span><a class="numero" href="{{ f.get_absolute_url }}">{{ f.numero }}</a> {{ f.get_tipo_display }} · {{ f.fecha_emision|date:"d/m/Y" }}</span><span>{{ f.total|dinero }} {% estado f.estado %}</span></div>
+  {% empty %}<p class="tenue">Sin facturar. <a href="{% url 'facturas:nueva' %}?orden={{ o.pk }}">Generar factura o recibo</a></p>{% endfor %}
+</section>
+{% endif %}
 {% endblock %}

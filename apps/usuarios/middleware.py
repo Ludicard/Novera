@@ -6,13 +6,19 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from django.contrib import messages
 
-from .roles import SESION_ROL, TECNICO, roles_de, roles_disponibles
+from .roles import MANAGER, SESION_ROL, TECNICO, roles_de, roles_disponibles
 
-# Secciones que no corresponden al rol Técnico (su menú: Mis tareas y sus órdenes de trabajo)
-SOLO_GESTION = (
-    "/panel/", "/facturas/", "/clientes/", "/finanzas/", "/usuarios/",
-    "/trabajos/proformas/", "/trabajos/asignar/", "/trabajos/ordenes/nueva/",
-)
+# Secciones que NO corresponden a cada rol (el Administrador puede todo)
+BLOQUEADAS = {
+    # Técnico: solo sus órdenes de trabajo y sus informes
+    TECNICO: (
+        "/panel/", "/facturas/", "/clientes/", "/finanzas/", "/usuarios/", "/informacion/",
+        "/trabajos/proformas/", "/trabajos/tecnicos/", "/trabajos/ordenes/nueva/",
+    ),
+    # Manager: clientes, técnicos, equipos, proformas, órdenes e información general; nada de finanzas
+    MANAGER: ("/panel/", "/facturas/", "/finanzas/", "/usuarios/"),
+}
+NOMBRES = {TECNICO: "Técnico", MANAGER: "Manager"}
 
 # Rutas que funcionan sin rol elegido (o sin rol): estáticos, salud, salir, contraseña y el propio selector
 PREFIJOS_LIBRES = ("/static/", "/media/", "/salud/", "/cuentas/password_", "/cuentas/reset/")
@@ -55,8 +61,9 @@ class RolMiddleware:
             return render(request, "usuarios/sin_rol.html", status=403)
         if request.rol is None:
             return redirect(self._selector(request))
-        if request.rol == TECNICO and ruta.startswith(SOLO_GESTION):
-            messages.info(request, "Esa sección no está disponible con el rol Técnico.")
+        bloqueadas = BLOQUEADAS.get(request.rol, ())
+        if ruta.startswith(bloqueadas) and not ruta.startswith("/usuarios/rol/"):
+            messages.info(request, f"Esa sección no está disponible con el rol {NOMBRES[request.rol]}.")
             return redirect("inicio")
         return self.get_response(request)
 

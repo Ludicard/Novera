@@ -18,9 +18,9 @@ ROLES = {
     TECNICO: "Técnico",
 }
 DESCRIPCIONES = {
-    MANAGER: "Seguimiento de cobros, clientes e indicadores",
-    ADMINISTRADOR: "Control total: facturas, usuarios e importaciones",
-    TECNICO: "Trabajo de campo y servicios asignados",
+    MANAGER: "Clientes, técnicos, equipos, proformas y órdenes de trabajo",
+    ADMINISTRADOR: "Proformas, órdenes, facturas, pagos y datos financieros",
+    TECNICO: "Mis órdenes de trabajo e informes",
 }
 SESION_ROL = "rol_activo"
 COOKIE_ULTIMO_ROL = "novera_rol"

@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from django.urls import include, path
 
 from apps.facturas.views import dashboard
-from apps.usuarios.inicio import finanzas, inicio
+from apps.usuarios.inicio import finanzas, informacion_general, inicio
 
 admin.site.site_header = "Novera · Administración"
 admin.site.site_title = "Novera"
@@ -23,6 +23,7 @@ urlpatterns = [
     path("", inicio, name="inicio"),
     path("panel/", dashboard, name="dashboard"),
     path("finanzas/", finanzas, name="finanzas"),
+    path("informacion/", informacion_general, name="informacion"),
     path("trabajos/", include("apps.trabajos.urls")),
     path("facturas/", include("apps.facturas.urls")),
     path("clientes/", include("apps.clientes.urls")),

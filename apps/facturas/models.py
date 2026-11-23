@@ -134,6 +134,10 @@ class Factura(models.Model):
     fecha_anulacion = models.DateField(null=True, blank=True)
     motivo_anulacion = models.CharField(max_length=255, blank=True)
 
+    ordenes = models.ManyToManyField(
+        "trabajos.OrdenTrabajo", blank=True, related_name="facturas", verbose_name="Órdenes de trabajo",
+        help_text="Una factura puede cobrar varias órdenes de trabajo.",
+    )
     notas = models.TextField(blank=True)
     importada = models.BooleanField(default=False, help_text="Creada por importación de Excel.")
     creado = models.DateTimeField(auto_now_add=True)

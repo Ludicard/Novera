@@ -26,24 +26,26 @@ cada factura se calcula solo.
 
 ### Menú de inicio y roles
 
-Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de iconos según el rol:
+Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de mosaicos según el rol:
 
-| Rol | Menú |
-|---|---|
-| Administrador / Manager | Administrar clientes · Órdenes de trabajo (y proformas) · Asignar tareas · Cargar datos financieros · Revisar información general (panel) |
-| Técnico | Mis tareas · Mis órdenes de trabajo (solo las suyas; no ve facturas, clientes ni el panel) |
+| Rol | Menú | No accede a |
+|---|---|---|
+| Administrador | Administrar proformas · Administrar órdenes de trabajo · Generar factura o recibo · Cargar pagos · Revisar datos financieros (panel) | — (además: clientes, usuarios) |
+| Manager | Administrar clientes y técnicos (una sección con dos pestañas) · Administrar equipos · Administrar proformas · Administrar órdenes de trabajo · Revisar información general (resumen operativo) | Facturas, pagos, panel financiero, usuarios |
+| Técnico | Mis órdenes de trabajo · Generar informe | Todo lo demás |
 
 ### Órdenes de trabajo (`apps/trabajos`)
 
-- **Proforma** (`PF-00001`): cotización al cliente con líneas (mano de obra / material, cantidad, precio) e IVA.
-  Estados: borrador → enviada → aprobada o rechazada. **Al aprobarse genera la orden de trabajo** con el cliente,
-  el trabajo y las líneas de material como materiales.
-- **Orden de trabajo** (`OT-00001`): cliente, trabajo, lugar, horas estimadas, fecha de inicio y de finalización,
-  materiales y herramientas. Estados: pendiente, en curso, terminada, cancelada.
-- **Tareas**: qué técnico hace qué orden, con sus responsabilidades, fecha límite y horas. El técnico las ve en
-  «Mis tareas» y marca su avance (en curso / hecha, con comentario).
+- **Proforma** (`PF-00001`): cotización con líneas (mano de obra / material) e IVA. Borrador → enviada → aprobada o
+  rechazada. **Al aprobarse genera la orden de trabajo** con el cliente, el trabajo y los materiales cotizados.
+- **Orden de trabajo** (`OT-00001`): cliente, **equipos** del cliente, técnicos asignados con sus instrucciones,
+  lugar, horas estimadas, inicio y fin, materiales y herramientas. Estados: pendiente, en curso, terminada, cancelada.
+- **Informe** del técnico: trabajo realizado, horas, materiales usados, observaciones; puede marcar la orden como
+  terminada. Los técnicos trabajan solo por órdenes (no hay tareas sueltas).
+- **Equipos** (`apps/clientes`): ascensores, montacargas… de cada cliente, con su historial de órdenes.
+- **Facturas y recibos** pueden cobrar **varias órdenes de trabajo**; los recibos se numeran `REC-00001`.
 
-Pendiente para la siguiente entrega: recibos y notas de crédito.
+Pendiente: notas de crédito.
 
 ## Stack
 
