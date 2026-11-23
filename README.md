@@ -36,8 +36,16 @@ Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de mos
 
 ### Órdenes de trabajo (`apps/trabajos`)
 
-- **Proforma** (`PF-00001`): cotización con líneas (mano de obra / material) e IVA. Borrador → enviada → aprobada o
-  rechazada. **Al aprobarse genera la orden de trabajo** con el cliente, el trabajo y los materiales cotizados.
+- **Proforma** (`PF-00001`): cotización con líneas (mano de obra / material) e IVA, forma de pago, garantía
+  (tiempo + condiciones) y condiciones generales. Borrador → enviada → aprobada o rechazada. **Al aprobarse genera la
+  orden de trabajo** con el cliente, el trabajo y los materiales cotizados.
+- **Proforma en PDF** (tamaño carta, «Página X de Y»): estructura tipo RIDE del SRI —emisor, cliente, detalle,
+  totales, información adicional, condiciones y firmas—. En Ecuador la proforma no tiene formato oficial ni validez
+  tributaria; el PDF lo indica al pie. Generado con WeasyPrint.
+  - **Logo:** `static/img/logo-empresa.png` (PNG, ~600 px de ancho). Sin el archivo, el PDF sale sin logo.
+    Ojo: el repositorio es público, el logo también lo será.
+  - **Datos del emisor:** variables `NOVERA_EMPRESA_*` del `.env` del servidor (razón social, nombre comercial, RUC,
+    dirección, teléfono, email, web).
 - **Orden de trabajo** (`OT-00001`): cliente, **equipos** del cliente, técnicos asignados con sus instrucciones,
   lugar, horas estimadas, inicio y fin, materiales y herramientas. Estados: pendiente, en curso, terminada, cancelada.
 - **Informe** del técnico: trabajo realizado, horas, materiales usados, observaciones; puede marcar la orden como

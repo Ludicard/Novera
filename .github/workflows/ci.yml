@@ -28,6 +28,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
       - run: pip install -r requirements.txt
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run

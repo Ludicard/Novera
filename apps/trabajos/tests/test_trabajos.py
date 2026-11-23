@@ -293,3 +293,50 @@ class ClienteDatosFacturacionTests(Base):
         entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
         r = self.client.get(reverse("facturas:nueva"))
         self.assertIn(str(self.cliente.pk), r.context["faltantes_clientes"])
+
+
+class ProformaPdfTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.p = Proforma.objects.create(
+            cliente=self.cliente, titulo="Cambio de cables", forma_pago="Contado", garantia_cantidad=3,
+            garantia_nota="Cubre repuestos", condiciones_generales="1. Precios incluyen IVA.",
+        )
+        self.p.lineas.create(descripcion="Mano de obra", cantidad=8, unidad="h", precio_unitario=25)
+
+    def test_garantia_en_texto(self):
+        self.assertEqual(self.p.garantia, "3 meses")
+        self.p.garantia_cantidad = 1
+        self.p.garantia_unidad = "ANIOS"
+        self.assertEqual(self.p.garantia, "1 año")
+
+    def test_descargar_pdf_carta(self):
+        entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
+        r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]))
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertIn("attachment", r["Content-Disposition"])
+        self.assertIn("PF-00001", r["Content-Disposition"])
+        self.assertTrue(r.content.startswith(b"%PDF"))
+        # Tamaño carta: 8,5 × 11 pulgadas = 612 × 792 puntos
+        from django.template.loader import render_to_string
+        from weasyprint import HTML
+
+        from django.conf import settings
+
+        html = render_to_string("trabajos/proforma_pdf.html", {"p": self.p, "lineas": self.p.lineas.all(), "empresa": settings.NOVERA_EMPRESA})
+        pagina = HTML(string=html).render().pages[0]
+        self.assertEqual((round(pagina.width * 0.75), round(pagina.height * 0.75)), (612, 792))
+        r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]) + "?ver=1")
+        self.assertIn("inline", r["Content-Disposition"])
+
+    def test_tecnico_no_descarga_proformas(self):
+        entrar_como(self.client, self.tec, TECNICO)
+        r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]))
+        self.assertEqual(r.status_code, 302)
+
+    def test_nueva_proforma_propone_condiciones_de_la_ultima(self):
+        entrar_como(self.client, User.objects.create_user("mana", password=CLAVE), MANAGER)
+        form = self.client.get(reverse("trabajos:proforma_nueva")).context["form"]
+        self.assertEqual(form.initial["forma_pago"], "Contado")
+        self.assertEqual(form.initial["condiciones_generales"], "1. Precios incluyen IVA.")
+        self.assertEqual(form.initial["garantia_cantidad"], 3)

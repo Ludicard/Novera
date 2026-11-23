@@ -43,6 +43,12 @@ class Auditoria(models.Model):
 # ---------------------------------------------------------------- proformas
 
 
+class UnidadTiempo(models.TextChoices):
+    DIAS = "DIAS", "días"
+    MESES = "MESES", "meses"
+    ANIOS = "ANIOS", "años"
+
+
 class Proforma(Auditoria):
     class Estado(models.TextChoices):
         BORRADOR = "BORRADOR", "Borrador"
@@ -59,7 +65,12 @@ class Proforma(Auditoria):
     porcentaje_iva = models.DecimalField("% IVA", max_digits=5, decimal_places=2, default=Decimal("15"))
     estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.BORRADOR)
     fecha_respuesta = models.DateField("Fecha de aprobación/rechazo", null=True, blank=True)
-    notas = models.TextField(blank=True)
+    forma_pago = models.CharField("Forma de pago", max_length=200, blank=True)
+    garantia_cantidad = models.PositiveSmallIntegerField("Garantía", null=True, blank=True)
+    garantia_unidad = models.CharField(max_length=6, choices=UnidadTiempo.choices, default=UnidadTiempo.MESES, blank=True)
+    garantia_nota = models.TextField("Condiciones de la garantía", blank=True)
+    condiciones_generales = models.TextField("Condiciones generales", blank=True)
+    notas = models.TextField("Notas internas", blank=True, help_text="No salen en el PDF.")
 
     class Meta:
         ordering = ["-fecha", "-numero"]
@@ -86,6 +97,22 @@ class Proforma(Auditoria):
     @property
     def total(self):
         return self.subtotal + self.iva
+
+    @property
+    def garantia(self):
+        """«3 meses», «1 año»… o vacío si no tiene garantía."""
+        if not self.garantia_cantidad:
+            return ""
+        unidad = UnidadTiempo(self.garantia_unidad or UnidadTiempo.MESES).label
+        if self.garantia_cantidad == 1:
+            unidad = {"días": "día", "meses": "mes", "años": "año"}[unidad]
+        return f"{self.garantia_cantidad} {unidad}"
+
+    @property
+    def valida_hasta(self):
+        from datetime import timedelta
+
+        return self.fecha + timedelta(days=self.validez_dias)
 
     @property
     def editable(self):

@@ -9,6 +9,11 @@ WORKDIR /app
 
 RUN useradd --create-home --uid 1000 novera
 
+# Librerías de sistema que necesita WeasyPrint para generar los PDF (proformas)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 

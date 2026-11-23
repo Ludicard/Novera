@@ -15,6 +15,7 @@ urlpatterns = [
     path("proformas/<int:pk>/", views.proforma, name="proforma"),
     path("proformas/<int:pk>/editar/", views.proforma_editar, name="proforma_editar"),
     path("proformas/<int:pk>/estado/", views.proforma_estado, name="proforma_estado"),
+    path("proformas/<int:pk>/pdf/", views.proforma_pdf, name="proforma_pdf"),
     path("informes/", views.informes, name="informes"),
     path("tecnicos/", views.tecnicos_lista, name="tecnicos"),
     path("tecnicos/nuevo/", views.tecnico_nuevo, name="tecnico_nuevo"),

@@ -146,3 +146,17 @@ LOGGING = {
 NOVERA_SERIE_FACTURA = os.environ.get("NOVERA_SERIE_FACTURA", "001-001")
 NOVERA_IVA_DEFECTO = 15
 NOVERA_DIAS_CREDITO_DEFECTO = 30
+
+# Datos del emisor para proformas en PDF (se configuran en .env del servidor, no en el código)
+NOVERA_EMPRESA = {
+    "razon_social": os.environ.get("NOVERA_EMPRESA_RAZON_SOCIAL", ""),
+    "nombre_comercial": os.environ.get("NOVERA_EMPRESA_NOMBRE_COMERCIAL", ""),
+    "ruc": os.environ.get("NOVERA_EMPRESA_RUC", ""),
+    "direccion": os.environ.get("NOVERA_EMPRESA_DIRECCION", ""),
+    "telefono": os.environ.get("NOVERA_EMPRESA_TELEFONO", ""),
+    "email": os.environ.get("NOVERA_EMPRESA_EMAIL", ""),
+    "web": os.environ.get("NOVERA_EMPRESA_WEB", ""),
+}
+# Logo de la empresa para los PDF: static/img/logo-empresa.png (si no existe, el PDF sale sin logo)
+NOVERA_LOGO = "img/logo-empresa.png"
+

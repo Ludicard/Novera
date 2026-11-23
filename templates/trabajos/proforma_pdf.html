@@ -1,0 +1,147 @@
+{% load novera %}<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Proforma {{ p.numero }}</title>
+<style>
+  @page {
+    size: letter;
+    margin: 16mm 15mm 20mm 15mm;
+    @bottom-left { content: "Proforma {{ p.numero }} · Documento sin validez tributaria: no reemplaza a la factura electrónica."; font-family: "DejaVu Sans", Arial, sans-serif; font-size: 7pt; color: #6b7682; }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-family: "DejaVu Sans", Arial, sans-serif; font-size: 8pt; font-weight: bold; color: #1f4e5f; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 9pt; color: #1d2733; line-height: 1.35; margin: 0; }
+  .azul { color: #1f4e5f; }
+  table { width: 100%; border-collapse: collapse; }
+  .cabecera td { vertical-align: top; }
+  .emisor { width: 58%; padding-right: 10px; }
+  .emisor img { max-width: 48mm; max-height: 22mm; margin-bottom: 6px; }
+  .emisor .razon { font-size: 12pt; font-weight: bold; }
+  .emisor .comercial { font-size: 10pt; color: #1f4e5f; font-weight: bold; }
+  .emisor p { margin: 1px 0; }
+  .caja { border: 1px solid #9fb0bd; border-radius: 4px; padding: 8px 10px; }
+  .doc { width: 42%; }
+  .doc .titulo { font-size: 17pt; font-weight: bold; letter-spacing: 1px; color: #1f4e5f; margin: 0 0 4px; }
+  .doc .numero { font-size: 11pt; font-weight: bold; margin-bottom: 6px; }
+  .doc table td { padding: 1.5px 0; }
+  .doc table td:first-child { color: #52606d; width: 48%; }
+  .seccion { margin-top: 10px; }
+  .cliente td { padding: 2px 4px; vertical-align: top; }
+  .cliente td.et { color: #52606d; width: 22%; white-space: nowrap; }
+  h3 { font-size: 9.5pt; margin: 0 0 4px; color: #1f4e5f; text-transform: uppercase; letter-spacing: .5px; }
+  .trabajo .tit { font-weight: bold; font-size: 10pt; }
+  .detalle { margin-top: 10px; }
+  .detalle th { background: #1f4e5f; color: #fff; font-size: 8pt; text-transform: uppercase; padding: 5px 6px; text-align: left; }
+  .detalle td { padding: 5px 6px; border-bottom: 1px solid #dfe4ea; vertical-align: top; }
+  .detalle tr:nth-child(even) td { background: #f5f7f9; }
+  .num { text-align: right; white-space: nowrap; }
+  .pie td { vertical-align: top; }
+  .adicional { width: 58%; padding-right: 10px; }
+  .adicional p { margin: 0 0 4px; }
+  .adicional .et { color: #52606d; }
+  .totales { width: 42%; }
+  .totales table td { padding: 4px 8px; border: 1px solid #c9d3db; }
+  .totales table td:first-child { color: #3b4652; }
+  .totales table tr.total td { background: #1f4e5f; color: #fff; font-weight: bold; font-size: 10.5pt; border-color: #1f4e5f; }
+  thead { display: table-header-group; }
+  .condiciones { white-space: pre-line; text-align: justify; }
+  .firmas { margin-top: 34px; page-break-inside: avoid; }
+  .firmas td { width: 50%; text-align: center; padding: 0 18px; vertical-align: top; }
+  .linea { border-top: 1px solid #1d2733; padding-top: 4px; }
+  .tenue { color: #6b7682; }
+  .pre { white-space: pre-line; }
+  tr, .caja { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+<table class="cabecera">
+  <tr>
+    <td class="emisor">
+      {% if logo %}<img src="{{ logo }}" alt="">{% endif %}
+      {% if empresa.razon_social %}<p class="razon">{{ empresa.razon_social }}</p>{% endif %}
+      {% if empresa.nombre_comercial %}<p class="comercial">{{ empresa.nombre_comercial }}</p>{% endif %}
+      {% if empresa.ruc %}<p><b>RUC:</b> {{ empresa.ruc }}</p>{% endif %}
+      {% if empresa.direccion %}<p><b>Dirección matriz:</b> {{ empresa.direccion }}</p>{% endif %}
+      {% if empresa.telefono %}<p><b>Teléfono:</b> {{ empresa.telefono }}</p>{% endif %}
+      {% if empresa.email %}<p><b>Email:</b> {{ empresa.email }}</p>{% endif %}
+      {% if empresa.web %}<p>{{ empresa.web }}</p>{% endif %}
+    </td>
+    <td class="doc">
+      <div class="caja">
+        <p class="titulo">PROFORMA</p>
+        <p class="numero">No. {{ p.numero }}</p>
+        <table>
+          <tr><td>Fecha de emisión:</td><td>{{ p.fecha|date:"d/m/Y" }}</td></tr>
+          <tr><td>Validez:</td><td>{{ p.validez_dias }} día{{ p.validez_dias|pluralize }}</td></tr>
+          <tr><td>Válida hasta:</td><td><b>{{ p.valida_hasta|date:"d/m/Y" }}</b></td></tr>
+          {% if p.estado == "APROBADA" %}<tr><td>Estado:</td><td>Aprobada {{ p.fecha_respuesta|date:"d/m/Y" }}</td></tr>{% endif %}
+        </table>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<div class="caja seccion">
+  <table class="cliente">
+    <tr><td class="et">Razón social / Nombres:</td><td colspan="3"><b>{{ p.cliente.nombre }}</b></td></tr>
+    <tr><td class="et">{{ p.cliente.tipo_identificacion|default:"RUC / C.I." }}:</td><td>{{ p.cliente.identificacion|default:"—" }}</td>
+        <td class="et">Teléfono:</td><td>{{ p.cliente.telefono|default:"—" }}</td></tr>
+    <tr><td class="et">Dirección:</td><td>{{ p.cliente.direccion|default:"—" }}</td>
+        <td class="et">Email:</td><td>{{ p.cliente.email|default:"—" }}</td></tr>
+  </table>
+</div>
+
+<div class="seccion trabajo">
+  <h3>Trabajo cotizado</h3>
+  <p class="tit">{{ p.titulo }}</p>
+  {% if p.descripcion %}<p class="pre">{{ p.descripcion }}</p>{% endif %}
+</div>
+
+<table class="detalle">
+  <thead><tr><th class="num" style="width:12%">Cant.</th><th style="width:9%">Unidad</th><th>Descripción</th><th class="num" style="width:15%">P. unitario</th><th class="num" style="width:15%">Subtotal</th></tr></thead>
+  <tbody>
+  {% for l in lineas %}
+    <tr><td class="num">{{ l.cantidad|floatformat:"-2" }}</td><td>{{ l.unidad }}</td><td>{{ l.descripcion }}</td>
+      <td class="num">{{ l.precio_unitario|dinero }}</td><td class="num">{{ l.importe|dinero }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<table class="pie seccion">
+  <tr>
+    <td class="adicional">
+      <div class="caja">
+        <h3>Información adicional</h3>
+        {% if p.forma_pago %}<p><span class="et">Forma de pago:</span> {{ p.forma_pago }}</p>{% endif %}
+        {% if p.garantia %}<p><span class="et">Garantía:</span> <b>{{ p.garantia }}</b></p>
+          {% if p.garantia_nota %}<p class="pre tenue">{{ p.garantia_nota }}</p>{% endif %}{% endif %}
+        <p><span class="et">Validez de la oferta:</span> {{ p.validez_dias }} día{{ p.validez_dias|pluralize }} (hasta el {{ p.valida_hasta|date:"d/m/Y" }})</p>
+      </div>
+    </td>
+    <td class="totales">
+      <table>
+        <tr><td>Subtotal {{ p.porcentaje_iva|floatformat:"-2" }} %</td><td class="num">{{ p.subtotal|dinero }}</td></tr>
+        <tr><td>Descuento</td><td class="num">$0.00</td></tr>
+        <tr><td>IVA {{ p.porcentaje_iva|floatformat:"-2" }} %</td><td class="num">{{ p.iva|dinero }}</td></tr>
+        <tr class="total"><td>VALOR TOTAL</td><td class="num">{{ p.total|dinero }}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% if p.condiciones_generales %}
+<div class="seccion">
+  <h3>Condiciones generales</h3>
+  <p class="condiciones">{{ p.condiciones_generales }}</p>
+</div>
+{% endif %}
+
+<table class="firmas">
+  <tr>
+    <td><div class="linea"><b>Elaborado por</b><br>{% if elaborado_por %}{{ elaborado_por }}<br><span class="tenue">{{ empresa.nombre_comercial|default:empresa.razon_social }}</span>{% else %}{{ empresa.nombre_comercial|default:empresa.razon_social }}{% endif %}</div></td>
+    <td><div class="linea"><b>Aceptado por el cliente</b><br>Nombre y C.I.: ______________________<br><span class="tenue">Fecha: ____ / ____ / ________</span></div></td>
+  </tr>
+</table>
+</body>
+</html>

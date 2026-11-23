@@ -11,7 +11,7 @@ from django.views.decorators.http import require_POST
 from apps.usuarios.permisos import requiere_rol
 from apps.usuarios.roles import ADMINISTRADOR, MANAGER, ROLES, TECNICO
 
-from .forms import InformeForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, tecnicos
+from .forms import FORMAS_PAGO_SUGERIDAS, InformeForm, LineasFormSet, OrdenForm, ProformaForm, RecursosFormSet, tecnicos
 from .models import Informe, OrdenTrabajo, Proforma, Recurso
 
 GESTION = (ADMINISTRADOR, MANAGER)
@@ -63,7 +63,10 @@ def _guardar_proforma(request, proforma=None):
         messages.success(request, f"Proforma {p.numero} guardada por ${p.total:,.2f}.")
         return redirect(p)
     titulo = f"Editar {proforma.numero}" if proforma else "Nueva proforma"
-    return render(request, "trabajos/proforma_form.html", {"form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma})
+    return render(request, "trabajos/proforma_form.html", {
+        "form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma, "formas_pago": FORMAS_PAGO_SUGERIDAS,
+        "campos_datos": ["cliente", "titulo", "fecha", "validez_dias", "porcentaje_iva", "descripcion"],
+    })
 
 
 @requiere_rol(*GESTION)
@@ -344,3 +347,28 @@ def tecnico_habilitar(request, pk):
     else:
         messages.success(request, f"{nombre} quedó deshabilitado: ya no puede iniciar sesión.")
     return redirect("trabajos:tecnicos")
+
+
+@requiere_rol(*GESTION)
+def proforma_pdf(request, pk):
+    """Proforma en PDF tamaño carta (estructura tipo RIDE: emisor, cliente, detalle, totales, condiciones)."""
+    from django.conf import settings
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    from django.template.loader import render_to_string
+    from django.utils.text import slugify
+    from weasyprint import HTML
+
+    p = get_object_or_404(Proforma.objects.select_related("cliente", "creado_por"), pk=pk)
+    logo = finders.find(settings.NOVERA_LOGO)
+    html = render_to_string("trabajos/proforma_pdf.html", {
+        "p": p, "lineas": p.lineas.all(), "empresa": settings.NOVERA_EMPRESA,
+        "logo": f"file://{logo}" if logo else None,
+        "elaborado_por": (p.creado_por.get_full_name() or p.creado_por.username) if p.creado_por else "",
+    })
+    pdf = HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
+    respuesta = HttpResponse(pdf, content_type="application/pdf")
+    nombre = f"Proforma {p.numero} - {slugify(p.cliente.nombre)[:40]}.pdf"
+    disposicion = "inline" if request.GET.get("ver") else "attachment"
+    respuesta["Content-Disposition"] = f'{disposicion}; filename="{nombre}"'
+    return respuesta

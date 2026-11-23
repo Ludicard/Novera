@@ -1,0 +1,7 @@
+Logo de la empresa para las proformas en PDF:
+
+  static/img/logo-empresa.png
+
+- Formato PNG, idealmente con fondo transparente.
+- Tamaño recomendado: unos 600 px de ancho (se muestra a ~4,5 cm de ancho en el PDF).
+- Si el archivo no existe, la proforma sale igual, sin logo.

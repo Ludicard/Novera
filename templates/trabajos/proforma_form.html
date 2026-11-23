@@ -7,7 +7,10 @@
   {% csrf_token %}
   <section class="tarjeta">
     <h2>Datos</h2>
-    <div class="campos campos-doc">{% include "_campos.html" %}</div>
+    <div class="campos campos-doc">
+      {% for campo in form %}{% if campo.name in campos_datos %}{% include "usuarios/_campo.html" %}{% endif %}{% endfor %}
+    </div>
+    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
   </section>
   <section class="tarjeta">
     <h2>Detalle de la cotización</h2>
@@ -18,6 +21,19 @@
       <div><span>IVA</span><strong id="r-iva">$0.00</strong></div>
       <div class="total"><span>Total</span><strong id="r-total">$0.00</strong></div>
     </div>
+  </section>
+  <section class="tarjeta">
+    <h2>Condiciones</h2>
+    <div class="campos campos-doc">
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.forma_pago %}</div>
+      {% include "usuarios/_campo.html" with campo=form.garantia_cantidad %}
+      {% include "usuarios/_campo.html" with campo=form.garantia_unidad %}
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.garantia_nota %}</div>
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.condiciones_generales %}</div>
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.notas %}</div>
+    </div>
+    <datalist id="formas-pago">{% for f in formas_pago %}<option value="{{ f }}">{% endfor %}</datalist>
+    <p class="tenue">La forma de pago, la garantía y las condiciones salen en el PDF; las notas internas no.</p>
   </section>
   <div class="acciones"><button class="boton primario">Guardar proforma</button>
     <a href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">Cancelar</a></div>

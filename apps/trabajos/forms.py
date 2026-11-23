@@ -27,13 +27,43 @@ class ClientesActivosMixin:
         self.fields["cliente"].empty_label = "Elige un cliente"
 
 
+FORMAS_PAGO_SUGERIDAS = [
+    "Contado",
+    "50 % de anticipo y 50 % contra entrega",
+    "70 % de anticipo y 30 % contra entrega",
+    "Crédito a 30 días",
+    "Transferencia bancaria",
+]
+
+
 class ProformaForm(ClientesActivosMixin, forms.ModelForm):
     porcentaje_iva = forms.TypedChoiceField(label="% IVA", choices=TASAS_IVA, coerce=str, initial="15")
 
     class Meta:
         model = Proforma
-        fields = ["cliente", "titulo", "fecha", "validez_dias", "porcentaje_iva", "descripcion", "notas"]
-        widgets = {"fecha": FECHA, "descripcion": forms.Textarea(attrs={"rows": 3}), "notas": forms.Textarea(attrs={"rows": 2})}
+        fields = [
+            "cliente", "titulo", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
+            "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales", "notas",
+        ]
+        widgets = {
+            "fecha": FECHA,
+            "descripcion": forms.Textarea(attrs={"rows": 3}),
+            "forma_pago": forms.TextInput(attrs={"list": "formas-pago", "placeholder": "Ej.: 50 % de anticipo y 50 % contra entrega"}),
+            "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
+            "garantia_nota": forms.Textarea(attrs={"rows": 2, "placeholder": "Ej.: cubre defectos de instalación y repuestos; no cubre mal uso…"}),
+            "condiciones_generales": forms.Textarea(attrs={"rows": 4, "placeholder": "Plazos, alcance, exclusiones, responsabilidades del cliente…"}),
+            "notas": forms.Textarea(attrs={"rows": 2}),
+        }
+        labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            # Para no reescribirlas cada vez: se proponen las de la última proforma
+            ultima = Proforma.objects.order_by("-creado").first()
+            if ultima:
+                for campo in ("forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales"):
+                    self.initial.setdefault(campo, getattr(ultima, campo))
 
 
 class LineaForm(forms.ModelForm):

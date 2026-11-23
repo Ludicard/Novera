@@ -5,7 +5,8 @@
 <div class="encabezado">
   <div><span class="tenue">Proforma · {{ p.fecha|date:"d/m/Y" }} · válida {{ p.validez_dias }} días</span><h1>{{ p.numero }} {% insignia p %}</h1></div>
   <div class="acciones-encabezado no-imprimir">
-    <button type="button" class="boton" onclick="window.print()">⎙ Imprimir</button>
+    <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}?ver=1" target="_blank" rel="noopener">Ver PDF</a>
+    <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}">⤓ Descargar PDF</a>
     {% if p.editable %}<a class="boton" href="{% url 'trabajos:proforma_editar' p.pk %}">Editar</a>{% endif %}
     <form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">
       {% csrf_token %}
@@ -55,6 +56,22 @@
     <div><span>IVA {{ p.porcentaje_iva|floatformat:"-2" }} %</span><strong>{{ p.iva|dinero }}</strong></div>
     <div class="total"><span>Total</span><strong>{{ p.total|dinero }}</strong></div>
   </div>
-  {% if p.notas %}<p class="pre tenue">{{ p.notas }}</p>{% endif %}
 </section>
+
+<div class="rejilla panel">
+  <section class="tarjeta">
+    <h2>Forma de pago y garantía</h2>
+    <dl class="datos">
+      <dt>Forma de pago</dt><dd>{{ p.forma_pago|default:"—" }}</dd>
+      <dt>Garantía</dt><dd>{{ p.garantia|default:"Sin garantía" }}</dd>
+      {% if p.garantia_nota %}<dt>Condiciones</dt><dd class="pre">{{ p.garantia_nota }}</dd>{% endif %}
+      <dt>Válida hasta</dt><dd>{{ p.valida_hasta|date:"d/m/Y" }}</dd>
+    </dl>
+  </section>
+  <section class="tarjeta">
+    <h2>Condiciones generales</h2>
+    {% if p.condiciones_generales %}<p class="pre">{{ p.condiciones_generales }}</p>{% else %}<p class="tenue">Sin condiciones generales.</p>{% endif %}
+    {% if p.notas %}<h3>Notas internas</h3><p class="pre tenue">{{ p.notas }}</p>{% endif %}
+  </section>
+</div>
 {% endblock %}
