@@ -449,8 +449,11 @@ h3 .enlace { font-size: .85rem; font-weight: 400; margin-left: .5rem; }
 @media (max-width: 640px) {
   .ocultar-movil { display: none; }
   .busqueda kbd { display: none; }
-  .acciones-encabezado .boton.primario { display: none; }
   .solo-escritorio { display: none !important; }
+  .acciones-encabezado { width: 100%; }
+  .acciones-encabezado .boton, .acciones-encabezado form.en-linea { flex: 1 1 auto; text-align: center; }
+  .acciones-encabezado form.en-linea { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .acciones-encabezado form.en-linea .boton.primario { order: -1; flex-basis: 100%; }
   .nav-principal { display: none !important; }
   .nav-inferior { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; background: var(--tarjeta); border-top: 1px solid var(--borde); box-shadow: 0 -4px 14px rgba(16,24,40,.06); padding: .3rem .3rem calc(.3rem + env(safe-area-inset-bottom)); }
   .nav-inferior a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: .1rem; font-size: .72rem; color: var(--tenue); text-decoration: none; padding: .35rem 0; border-radius: 8px; }

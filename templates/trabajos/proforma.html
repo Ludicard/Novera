@@ -50,7 +50,7 @@
 {% elif p.estado == "ENVIADA" and rol != "manager" %}
   <div class="mensaje">📨 Enviada al cliente. Cuando el cliente la acepte, el Manager la procesará para poder generar la orden de trabajo.</div>
 {% elif p.estado == "PROCESADA" %}
-  <div class="mensaje success">✓ Procesada por {{ p.procesada_por.get_full_name|default:p.procesada_por.username }} el {{ p.fecha_procesada|date:"d/m/Y H:i" }}: ya se puede <strong>generar la orden de trabajo</strong>.</div>
+  <div class="mensaje success">✓ Procesada{% if p.procesada_por %} por {{ p.procesada_por.get_full_name|default:p.procesada_por.username }}{% endif %}{% if p.fecha_procesada %} el {{ p.fecha_procesada|date:"d/m/Y H:i" }}{% endif %}: ya se puede <strong>generar la orden de trabajo</strong>.</div>
 {% endif %}
 {% if p.autorizada_por and p.estado != "POR_AUTORIZAR" and p.estado != "DEVUELTA" and p.estado != "BORRADOR" %}
   <p class="tenue">🔒 Autorizada por {{ p.autorizada_por.get_full_name|default:p.autorizada_por.username }} el {{ p.fecha_autorizacion|date:"d/m/Y H:i" }}{% if p.observacion_autorizacion %} · «{{ p.observacion_autorizacion }}»{% endif %}. Ya no se puede editar.</p>
