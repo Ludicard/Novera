@@ -36,3 +36,4 @@ class OrdenAdmin(admin.ModelAdmin):
     autocomplete_fields = ["cliente"]
     inlines = [RecursoInline, InformeInline]
     filter_horizontal = ["tecnicos"]
+

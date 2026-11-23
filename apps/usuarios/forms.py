@@ -90,13 +90,47 @@ class CuentaForm(forms.ModelForm):
         return datos
 
 
+GRADOS_SUGERIDOS = ["Bachiller", "Bachiller técnico", "Técnico superior", "Tecnólogo", "Ingeniero", "Máster"]
+
+
 class TecnicoForm(CuentaForm):
-    """Cuenta de técnico para el Manager: mismo formulario, con el rol fijo en Técnico."""
+    """Ficha del técnico para el Manager: cuenta (nombre, usuario, clave, habilitada) + datos del perfil."""
+
+    grado_academico = forms.CharField(
+        label="Grado académico", max_length=120, required=False,
+        widget=forms.TextInput(attrs={"list": "grados-sugeridos", "placeholder": "Ej.: Tecnólogo en electromecánica"}),
+    )
+    capacidades = forms.CharField(
+        label="Capacidades adicionales", required=False,
+        help_text="Certificaciones, especialidades, equipos que domina, licencias…",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    telefono = forms.CharField(label="Teléfono (contacto directo)", max_length=30, required=False)
+    direccion = forms.CharField(label="Dirección", max_length=255, required=False)
+    CAMPOS_PERFIL = ["grado_academico", "capacidades", "telefono", "direccion"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields.pop("roles")
+        self.fields.pop("email")
+        self.fields["first_name"].label = "Nombre"
+        if "activo" in self.fields:
+            self.fields["activo"].label = "Cuenta habilitada"
+            self.fields["activo"].help_text = "Deshabilitada: no puede iniciar sesión (su historial se conserva)."
+        perfil = getattr(self.instance, "perfil_tecnico", None) if self.instance.pk else None
+        if perfil:
+            for campo in self.CAMPOS_PERFIL:
+                self.fields[campo].initial = getattr(perfil, campo)
 
     def clean(self):
         self.cleaned_data["roles"] = [TECNICO]
         return super().clean()
+
+    def guardar_perfil(self, usuario):
+        from apps.trabajos.models import PerfilTecnico
+
+        perfil, _ = PerfilTecnico.objects.get_or_create(usuario=usuario)
+        for campo in self.CAMPOS_PERFIL:
+            setattr(perfil, campo, self.cleaned_data.get(campo, "").strip())
+        perfil.save()
+        return perfil

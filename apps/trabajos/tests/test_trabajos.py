@@ -157,13 +157,42 @@ class TecnicosYEquiposTests(Base):
         self.mana = User.objects.create_user("mana", password=CLAVE)
         entrar_como(self.client, self.mana, MANAGER)
 
-    def test_manager_crea_tecnico(self):
+    def test_manager_crea_tecnico_con_su_perfil(self):
         r = self.client.post(reverse("trabajos:tecnico_nuevo"), {
-            "first_name": "Ana", "last_name": "", "username": "ana", "email": "",
+            "first_name": "Ana", "last_name": "Ruiz", "username": "ana", "grado_academico": "Tecnóloga",
+            "capacidades": "Certificación Otis", "telefono": "0990000001", "direccion": "Quito norte",
             "password1": "Clave-Segura-987", "password2": "Clave-Segura-987",
         })
         self.assertRedirects(r, reverse("trabajos:tecnicos"))
-        self.assertEqual(roles_de(User.objects.get(username="ana")), [TECNICO])
+        ana = User.objects.get(username="ana")
+        self.assertEqual(roles_de(ana), [TECNICO])
+        self.assertEqual((ana.perfil_tecnico.grado_academico, ana.perfil_tecnico.telefono), ("Tecnóloga", "0990000001"))
+        self.assertTrue(ana.check_password("Clave-Segura-987"))
+        # Editar el perfil sin tocar la clave
+        r = self.client.post(reverse("trabajos:tecnico_editar", args=[ana.pk]), {
+            "first_name": "Ana", "last_name": "Ruiz", "username": "ana", "grado_academico": "Ingeniera",
+            "capacidades": "", "telefono": "0990000002", "direccion": "", "activo": "on",
+        })
+        ana.refresh_from_db()
+        self.assertEqual(ana.perfil_tecnico.grado_academico, "Ingeniera")
+        self.assertTrue(ana.check_password("Clave-Segura-987"))
+        self.assertContains(self.client.get(reverse("trabajos:tecnicos")), "Ingeniera")
+
+    def test_habilitar_y_deshabilitar(self):
+        self.client.post(reverse("trabajos:tecnico_habilitar", args=[self.tec.pk]))
+        self.tec.refresh_from_db()
+        self.assertFalse(self.tec.is_active)
+        self.assertEqual(self.client_class().post(reverse("login"), {"username": "luis", "password": CLAVE}).status_code, 200)
+        self.client.post(reverse("trabajos:tecnico_habilitar", args=[self.tec.pk]))
+        self.tec.refresh_from_db()
+        self.assertTrue(self.tec.is_active)
+
+    def test_solo_el_manager_ve_los_datos_de_los_tecnicos(self):
+        entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
+        for url in [reverse("trabajos:tecnicos"), reverse("trabajos:tecnico_nuevo"),
+                    reverse("trabajos:tecnico_editar", args=[self.tec.pk])]:
+            self.assertRedirects(self.client.get(url), reverse("inicio"), fetch_redirect_response=False)
+        self.assertNotContains(self.client.get(reverse("clientes:lista")), reverse("trabajos:tecnicos"))
 
     def test_manager_no_edita_cuentas_con_otros_roles(self):
         jefa = User.objects.create_user("jefa", password=CLAVE)

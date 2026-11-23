@@ -10,7 +10,7 @@
   <a class="kpi alerta" href="{% url 'trabajos:ordenes' %}?estado=sin_tecnico"><span>Sin técnico</span><strong>{{ kpis.sin_tecnico }}</strong><small>órdenes abiertas sin asignar</small></a>
   <a class="kpi verde" href="{% url 'trabajos:proformas' %}"><span>Proformas por responder</span><strong>{{ kpis.pf_por_responder }}</strong><small>{{ kpis.pf_mes }} nueva{{ kpis.pf_mes|pluralize }} este mes{% if kpis.tasa_aprobacion is not None %} · {{ kpis.tasa_aprobacion }} % aprobadas{% endif %}</small></a>
   <a class="kpi neutro" href="{% url 'clientes:lista' %}"><span>Clientes activos</span><strong>{{ kpis.clientes }}</strong><small>{{ kpis.equipos }} equipo{{ kpis.equipos|pluralize }} en servicio</small></a>
-  <a class="kpi neutro" href="{% url 'trabajos:tecnicos' %}"><span>Informes este mes</span><strong>{{ kpis.informes_mes }}</strong><small>de los técnicos</small></a>
+  <div class="kpi neutro"><span>Informes este mes</span><strong>{{ kpis.informes_mes }}</strong><small>de los técnicos</small></div>
 </section>
 
 <div class="rejilla panel">
@@ -27,7 +27,7 @@
   <section class="tarjeta">
     <h2>Carga de los técnicos</h2>
     {% for t in carga %}<div class="fila-simple"><span>{{ t|nombre }}</span><span><b>{{ t.abiertas }}</b> abierta{{ t.abiertas|pluralize }} <small class="tenue">· {{ t.informes_mes }} informe{{ t.informes_mes|pluralize }} este mes</small></span></div>
-    {% empty %}<p class="tenue">Aún no hay técnicos. <a href="{% url 'trabajos:tecnico_nuevo' %}">Crear uno</a>.</p>{% endfor %}
+    {% empty %}<p class="tenue">Aún no hay técnicos.{% if rol == "manager" %} <a href="{% url 'trabajos:tecnico_nuevo' %}">Crear uno</a>.{% endif %}</p>{% endfor %}
   </section>
   <section class="tarjeta">
     <h2>Últimos informes</h2>

@@ -215,3 +215,23 @@ class Informe(Auditoria):
 
     def __str__(self):
         return f"Informe {self.orden.numero} · {self.fecha:%d/%m/%Y}"
+
+
+class PerfilTecnico(models.Model):
+    """Datos del técnico (solo los ve el Manager). El nombre, usuario y clave están en la cuenta."""
+
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="perfil_tecnico")
+    grado_academico = models.CharField("Grado académico", max_length=120, blank=True)
+    capacidades = models.TextField(
+        "Capacidades adicionales", blank=True, help_text="Certificaciones, especialidades, equipos que domina, licencias…"
+    )
+    telefono = models.CharField("Teléfono (contacto directo)", max_length=30, blank=True)
+    direccion = models.CharField("Dirección", max_length=255, blank=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "perfil de técnico"
+        verbose_name_plural = "perfiles de técnicos"
+
+    def __str__(self):
+        return f"Perfil de {self.usuario}"

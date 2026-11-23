@@ -1,11 +1,13 @@
 {# Cabecera común de «Administrar clientes y técnicos»: una sola sección con dos pestañas #}
 <a class="volver" href="{% url 'inicio' %}">← Inicio</a>
 <div class="encabezado">
-  <div><h1>Clientes y técnicos</h1><span class="tenue">{% if seccion == "tecnicos" %}Cuentas de los técnicos y su carga de trabajo{% else %}Datos, RUC, contacto y equipos de cada cliente{% endif %}</span></div>
+  <div><h1>{% if rol == "manager" %}Clientes y técnicos{% else %}Clientes{% endif %}</h1><span class="tenue">{% if seccion == "tecnicos" %}Cuentas de los técnicos y su carga de trabajo{% else %}Datos, RUC, contacto y equipos de cada cliente{% endif %}</span></div>
   {% if seccion == "tecnicos" %}<a class="boton primario" href="{% url 'trabajos:tecnico_nuevo' %}">+ Nuevo técnico</a>
   {% else %}<a class="boton primario" href="{% url 'clientes:nuevo' %}">+ Nuevo cliente</a>{% endif %}
 </div>
+{% if rol == "manager" %}
 <nav class="pestanas" aria-label="Clientes o técnicos">
   <a class="pestana {% if seccion != 'tecnicos' %}activa{% endif %}" href="{% url 'clientes:lista' %}"><span>Clientes</span><b>{{ n_clientes }}</b></a>
   <a class="pestana {% if seccion == 'tecnicos' %}activa{% endif %}" href="{% url 'trabajos:tecnicos' %}"><span>Técnicos</span><b>{{ n_tecnicos }}</b></a>
 </nav>
+{% endif %}

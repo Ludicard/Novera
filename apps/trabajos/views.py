@@ -244,12 +244,13 @@ def informes(request):
 # ---------------------------------------------------------------- técnicos (Manager)
 
 
-@requiere_rol(*GESTION)
+@requiere_rol(MANAGER)
 def tecnicos_lista(request):
     abiertas = [OrdenTrabajo.Estado.PENDIENTE, OrdenTrabajo.Estado.EN_CURSO]
     inicio_mes = timezone.localdate().replace(day=1)
     lista = (
         tecnicos_y_desactivados()
+        .select_related("perfil_tecnico")
         .annotate(
             abiertas=Count("ordenes_asignadas", filter=Q(ordenes_asignadas__estado__in=abiertas), distinct=True),
             terminadas=Count("ordenes_asignadas", filter=Q(ordenes_asignadas__estado=OrdenTrabajo.Estado.TERMINADA), distinct=True),
@@ -274,7 +275,7 @@ def _solo_tecnico(usuario):
     return not usuario.is_superuser and roles_de(usuario) == [TECNICO]
 
 
-@requiere_rol(*GESTION)
+@requiere_rol(MANAGER)
 def tecnico_nuevo(request):
     from apps.usuarios.forms import TecnicoForm
     from apps.usuarios.roles import asignar_roles
@@ -285,17 +286,20 @@ def tecnico_nuevo(request):
         u.set_password(form.cleaned_data["password1"])
         u.save()
         asignar_roles(u, [TECNICO])
+        form.guardar_perfil(u)
         messages.success(request, f"Técnico «{u.username}» creado. Ya puede iniciar sesión.")
         return redirect("trabajos:tecnicos")
-    return render(request, "trabajos/tecnico_form.html", {"form": form, "titulo": "Nuevo técnico"})
+    from apps.usuarios.forms import GRADOS_SUGERIDOS
+
+    return render(request, "trabajos/tecnico_form.html", {"form": form, "titulo": "Nuevo técnico", "grados": GRADOS_SUGERIDOS})
 
 
-@requiere_rol(*GESTION)
+@requiere_rol(MANAGER)
 def tecnico_editar(request, pk):
     from django.contrib.auth import get_user_model
     from django.contrib.auth import update_session_auth_hash
 
-    from apps.usuarios.forms import TecnicoForm
+    from apps.usuarios.forms import GRADOS_SUGERIDOS, TecnicoForm
 
     usuario = get_object_or_404(get_user_model(), pk=pk)
     if not _solo_tecnico(usuario):
@@ -310,6 +314,7 @@ def tecnico_editar(request, pk):
         if nueva:
             u.set_password(nueva)
         u.save()
+        form.guardar_perfil(u)
         if nueva and u == request.user:
             update_session_auth_hash(request, u)
         messages.success(request, f"Técnico «{u.username}» actualizado" + (" y contraseña cambiada." if nueva else "."))
@@ -317,4 +322,25 @@ def tecnico_editar(request, pk):
     ordenes = usuario.ordenes_asignadas.select_related("cliente").order_by("-creado")[:20]
     return render(request, "trabajos/tecnico_form.html", {
         "form": form, "cuenta": usuario, "titulo": f"Técnico: {usuario.get_full_name() or usuario.username}", "ordenes": ordenes,
+        "grados": GRADOS_SUGERIDOS,
     })
+
+
+@requiere_rol(MANAGER)
+@require_POST
+def tecnico_habilitar(request, pk):
+    """Habilita o deshabilita la cuenta del técnico (deshabilitada: no puede iniciar sesión)."""
+    from django.contrib.auth import get_user_model
+
+    usuario = get_object_or_404(get_user_model(), pk=pk)
+    if not _solo_tecnico(usuario) or usuario == request.user:
+        messages.error(request, "Esa cuenta no se puede habilitar o deshabilitar desde aquí.")
+        return redirect("trabajos:tecnicos")
+    usuario.is_active = not usuario.is_active
+    usuario.save(update_fields=["is_active"])
+    nombre = usuario.get_full_name() or usuario.username
+    if usuario.is_active:
+        messages.success(request, f"{nombre} quedó habilitado: ya puede iniciar sesión.")
+    else:
+        messages.success(request, f"{nombre} quedó deshabilitado: ya no puede iniciar sesión.")
+    return redirect("trabajos:tecnicos")

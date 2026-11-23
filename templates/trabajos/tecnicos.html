@@ -4,17 +4,23 @@
 {% include "clientes/_pestanas_directorio.html" with seccion="tecnicos" %}
 <div class="tarjeta sin-relleno desplazable">
 <table class="lista usuarios">
-  <thead><tr><th>Técnico</th><th>Usuario</th><th class="num">Órdenes abiertas</th><th class="num ocultar-movil">Terminadas</th><th class="num ocultar-movil">Informes este mes</th><th>Estado</th><th></th></tr></thead>
+  <thead><tr><th>Técnico</th><th class="ocultar-movil">Grado académico</th><th>Teléfono</th><th class="num">Órdenes abiertas</th><th class="num ocultar-movil">Informes este mes</th><th>Estado</th><th></th></tr></thead>
   <tbody>
   {% for t in tecnicos %}
     <tr class="{% if not t.is_active %}inactiva{% endif %}">
-      <td><strong>{{ t|nombre }}</strong>{% if t.email %}<small class="tenue bloque">{{ t.email }}</small>{% endif %}</td>
-      <td>{{ t.username }}</td>
-      <td class="num">{% if t.abiertas %}<a href="{% url 'trabajos:tecnico_editar' t.pk %}">{{ t.abiertas }}</a>{% else %}0{% endif %}</td>
-      <td class="num ocultar-movil">{{ t.terminadas }}</td>
+      <td><strong>{{ t|nombre }}</strong><small class="tenue bloque">usuario: {{ t.username }}</small></td>
+      <td class="ocultar-movil">{{ t.perfil_tecnico.grado_academico|default:"—" }}</td>
+      <td class="nowrap">{{ t.perfil_tecnico.telefono|default:"—" }}</td>
+      <td class="num">{{ t.abiertas }}</td>
       <td class="num ocultar-movil">{{ t.informes_mes }}</td>
-      <td>{% if t.is_active %}<span class="estado pagada">Activa</span>{% else %}<span class="estado anulada">Desactivada</span>{% endif %}</td>
-      <td class="acciones-col"><a class="boton chico" href="{% url 'trabajos:tecnico_editar' t.pk %}">Editar</a></td>
+      <td>{% if t.is_active %}<span class="estado pagada">Habilitado</span>{% else %}<span class="estado anulada">Deshabilitado</span>{% endif %}</td>
+      <td class="acciones-col nowrap">
+        <a class="boton chico" href="{% url 'trabajos:tecnico_editar' t.pk %}">Editar</a>
+        <form method="post" action="{% url 'trabajos:tecnico_habilitar' t.pk %}" class="en-linea"
+              onsubmit="return confirm('{% if t.is_active %}¿Deshabilitar a {{ t|nombre|escapejs }}? No podrá iniciar sesión.{% else %}¿Habilitar a {{ t|nombre|escapejs }}?{% endif %}')">
+          {% csrf_token %}<button class="boton chico {% if t.is_active %}texto-rojo{% endif %}">{% if t.is_active %}Deshabilitar{% else %}Habilitar{% endif %}</button>
+        </form>
+      </td>
     </tr>
   {% empty %}
     <tr><td colspan="7" class="vacio-tabla"><strong>Aún no hay técnicos.</strong><a href="{% url 'trabajos:tecnico_nuevo' %}">Crea el primero</a></td></tr>
