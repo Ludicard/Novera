@@ -136,6 +136,10 @@ tr.inactiva td { color: var(--tenue); }
 .interruptor-campo { display: flex !important; flex-direction: row !important; gap: .5rem; align-items: center; font-weight: 600; }
 .generada code { background: var(--fondo); padding: .1rem .4rem; border-radius: 5px; font-size: .95rem; user-select: all; }
 
+.logo-actual { border: 1px dashed var(--borde); border-radius: var(--radio); padding: .8rem; margin-bottom: .6rem; background: repeating-conic-gradient(#f4f6f8 0 25%, #fff 0 50%) 50% / 16px 16px; text-align: center; }
+.logo-actual img { max-width: 100%; max-height: 120px; }
+.lista-seguridad { padding-left: 1.1rem; margin: 0; display: flex; flex-direction: column; gap: .55rem; }
+
 /* --- Selección de rol */
 .manager { --rol: #1e5fa8; --rol-claro: #e6effa; }
 .administrador { --rol: #1a7f4b; --rol-claro: #e3f4ea; }

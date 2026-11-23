@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block content %}
+<a class="volver" href="{% url 'inicio' %}">← Inicio</a>
+<div class="encabezado"><div><h1>Configuración</h1><span class="tenue">Datos de la empresa que salen en las proformas en PDF</span></div></div>
+
+<div class="rejilla panel">
+  <form method="post" enctype="multipart/form-data" class="tarjeta formulario cuenta-form">
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+    <h2>Datos del emisor</h2>
+    <div class="campos">
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.razon_social %}</div>
+      {% include "usuarios/_campo.html" with campo=form.nombre_comercial %}
+      {% include "usuarios/_campo.html" with campo=form.ruc %}
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.direccion_matriz %}</div>
+      {% include "usuarios/_campo.html" with campo=form.telefono %}
+      {% include "usuarios/_campo.html" with campo=form.email %}
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.web %}</div>
+    </div>
+    <h2 class="seccion">Logo</h2>
+    {% if empresa.logo %}
+    <div class="logo-actual"><img src="{% url 'configuracion:logo' %}?v={{ empresa.actualizado|date:'U' }}" alt="Logo actual de la empresa"></div>
+    <label class="interruptor-campo">{{ form.quitar_logo }} {{ form.quitar_logo.label }}</label>
+    {% endif %}
+    <div class="campos">{% include "usuarios/_campo.html" with campo=form.logo %}</div>
+    <div class="acciones"><button class="boton primario">Guardar configuración</button><a href="{% url 'inicio' %}">Cancelar</a></div>
+    {% if empresa %}<p class="tenue">Último cambio: {{ empresa.actualizado|date:"d/m/Y H:i" }}{% if empresa.actualizado_por %} por {{ empresa.actualizado_por.get_full_name|default:empresa.actualizado_por.username }}{% endif %}.</p>{% endif %}
+  </form>
+
+  <section class="tarjeta">
+    <h2>¿Dónde se guarda y quién lo ve?</h2>
+    <ul class="lista-seguridad">
+      <li><strong>En la base de datos del servidor</strong>, no en el código (que es público).</li>
+      <li><strong>Solo el rol Administrador</strong> puede ver y cambiar esta pantalla.</li>
+      <li>Todo viaja <strong>cifrado por HTTPS</strong> y el formulario está protegido contra envíos falsificados.</li>
+      <li>El <strong>logo</strong> se revisa, se limpia (se vuelve a guardar como PNG) y no tiene una dirección pública: solo se muestra a usuarios con sesión.</li>
+      <li>Se registra <strong>quién hizo el último cambio y cuándo</strong>, y entra en la <strong>copia de seguridad diaria</strong>.</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}

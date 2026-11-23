@@ -1,7 +1,5 @@
-Logo de la empresa para las proformas en PDF:
+El logo de la empresa se sube desde Novera: menú de la cuenta (Administrador) → Configuración.
+Se guarda en el servidor, fuera del repositorio.
 
-  static/img/logo-empresa.png
-
-- Formato PNG, idealmente con fondo transparente.
-- Tamaño recomendado: unos 600 px de ancho (se muestra a ~4,5 cm de ancho en el PDF).
-- Si el archivo no existe, la proforma sale igual, sin logo.
+Solo como respaldo (si no se subió ninguno), el PDF usa static/img/logo-empresa.png si existe.
+Ojo: lo que se pone en static/ queda en el repositorio, que es público.

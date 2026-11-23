@@ -46,7 +46,8 @@
         <div class="menu-cabecera"><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ user.username }}{% if rol %} · {{ rol_nombre }}{% endif %}</small></div>
         {% if puede_cambiar_rol %}<a href="{% url 'usuarios:elegir_rol' %}?siguiente={{ request.get_full_path|urlencode }}">⇄ Cambiar de rol</a>{% endif %}
         {% if rol %}<a href="{% url 'password_change' %}">🔑 Cambiar mi contraseña</a>{% endif %}
-        {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}">👥 Usuarios y accesos</a>{% endif %}
+        {% if rol == "administrador" %}<a href="{% url 'usuarios:lista' %}">👥 Usuarios y accesos</a>
+        <a href="{% url 'configuracion:empresa' %}">⚙ Configuración</a>{% endif %}
         {% if user.is_superuser %}<a href="{% url 'admin:index' %}">⚙ Admin avanzado</a>{% endif %}
         <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="salir">↩ Salir</button></form>
       </div>

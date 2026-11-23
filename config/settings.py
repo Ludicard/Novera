@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.facturas",
     "apps.usuarios",
     "apps.trabajos",
+    "apps.configuracion",
 ]
 
 MIDDLEWARE = [
@@ -147,7 +148,8 @@ NOVERA_SERIE_FACTURA = os.environ.get("NOVERA_SERIE_FACTURA", "001-001")
 NOVERA_IVA_DEFECTO = 15
 NOVERA_DIAS_CREDITO_DEFECTO = 30
 
-# Datos del emisor para proformas en PDF (se configuran en .env del servidor, no en el código)
+# Datos del emisor: se editan en Novera → Configuración (base de datos). Estas variables solo son el respaldo
+# si todavía no se ha guardado nada allí.
 NOVERA_EMPRESA = {
     "razon_social": os.environ.get("NOVERA_EMPRESA_RAZON_SOCIAL", ""),
     "nombre_comercial": os.environ.get("NOVERA_EMPRESA_NOMBRE_COMERCIAL", ""),
@@ -157,6 +159,9 @@ NOVERA_EMPRESA = {
     "email": os.environ.get("NOVERA_EMPRESA_EMAIL", ""),
     "web": os.environ.get("NOVERA_EMPRESA_WEB", ""),
 }
-# Logo de la empresa para los PDF: static/img/logo-empresa.png (si no existe, el PDF sale sin logo)
+# Logo de respaldo para los PDF si no se subió uno en Configuración: static/img/logo-empresa.png
 NOVERA_LOGO = "img/logo-empresa.png"
+# Subidas: límite de tamaño de lo que se carga en memoria (el logo se valida aparte a 2 MB)
+FILE_UPLOAD_PERMISSIONS = 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
 

@@ -30,5 +30,6 @@ urlpatterns = [
     path("cuentas/login/", LoginView.as_view(redirect_authenticated_user=True), name="login"),
     path("cuentas/", include("django.contrib.auth.urls")),
     path("usuarios/", include("apps.usuarios.urls")),
+    path("configuracion/", include("apps.configuracion.urls")),
     path("admin/", admin.site.urls),
 ]
