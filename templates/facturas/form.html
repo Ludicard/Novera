@@ -29,6 +29,7 @@
       <label class="ancho">Nombre * <input name="nombre" required maxlength="200"></label>
       <label>RUC / Cédula <input name="identificacion" maxlength="13" inputmode="numeric"></label>
       <label>Días de crédito <input type="number" name="dias_credito" value="30" min="0" required></label>
+      <label class="ancho interruptor-campo"><input type="checkbox" name="agente_retencion"> Es agente de retención</label>
       <label class="ancho">Email <input type="email" name="email"></label>
     </div>
     <p class="mensaje error" id="cliente-errores" hidden></p>
@@ -39,5 +40,6 @@
   </form>
 </dialog>
 {{ dias_clientes|json_script:"dias-clientes" }}
+{{ faltantes_clientes|json_script:"faltantes-clientes" }}
 {% endblock %}
 {% block scripts %}<script src="{% static 'js/factura_form.js' %}"></script><script src="{% static 'js/filtrar_por_cliente.js' %}"></script>{% endblock %}

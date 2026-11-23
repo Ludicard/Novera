@@ -1,13 +1,32 @@
 {% extends "base.html" %}
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
-<div class="encabezado">
-  <h1>{{ titulo }}</h1>
-  <a href="{% if cliente %}{{ cliente.get_absolute_url }}{% else %}{% url 'clientes:lista' %}{% endif %}">Cancelar</a>
-</div>
-<form method="post" class="tarjeta formulario">
+<a class="volver" href="{% if cliente %}{{ cliente.get_absolute_url }}{% else %}{% url 'clientes:lista' %}{% endif %}">← Volver</a>
+<div class="encabezado"><h1>{{ titulo }}</h1></div>
+<form method="post" class="tarjeta formulario cuenta-form angosto-ancho">
   {% csrf_token %}
-  <div class="campos">{% include "_campos.html" %}</div>
-  <div class="acciones"><button class="boton primario">Guardar</button></div>
+  {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+  <h2>Datos para facturar</h2>
+  <p class="tenue">Con estos datos completos se puede emitir una factura válida al cliente.</p>
+  <div class="campos">
+    {% include "usuarios/_campo.html" with campo=form.nombre %}
+    {% include "usuarios/_campo.html" with campo=form.identificacion %}
+    {% include "usuarios/_campo.html" with campo=form.email %}
+    {% include "usuarios/_campo.html" with campo=form.direccion %}
+    <div class="campo activo"><label class="interruptor-campo">{{ form.agente_retencion }} {{ form.agente_retencion.label }}</label><small>{{ form.agente_retencion.help_text }}</small></div>
+  </div>
+  <h2 class="seccion">Contacto</h2>
+  <div class="campos">
+    {% include "usuarios/_campo.html" with campo=form.telefono %}
+    {% include "usuarios/_campo.html" with campo=form.telefono_contacto %}
+  </div>
+  <h2 class="seccion">Condiciones</h2>
+  <div class="campos">
+    {% include "usuarios/_campo.html" with campo=form.dias_credito %}
+    <div class="campo"><label class="interruptor-campo">{{ form.activo }} Cliente activo</label><small>{{ form.activo.help_text }}</small></div>
+    <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.notas %}</div>
+  </div>
+  <div class="acciones"><button class="boton primario">Guardar cliente</button>
+    <a href="{% if cliente %}{{ cliente.get_absolute_url }}{% else %}{% url 'clientes:lista' %}{% endif %}">Cancelar</a></div>
 </form>
 {% endblock %}

@@ -46,7 +46,15 @@ class Cliente(models.Model):
     )
     email = models.EmailField(blank=True)
     telefono = models.CharField("Teléfono", max_length=30, blank=True)
+    telefono_contacto = models.CharField(
+        "Teléfono de contacto", max_length=60, blank=True,
+        help_text="Contacto informal: persona y número para coordinar (no sale en la factura).",
+    )
     direccion = models.CharField("Dirección", max_length=255, blank=True)
+    agente_retencion = models.BooleanField(
+        "Agente de retención", default=False,
+        help_text="Marca si el cliente es agente de retención (te retendrá IVA/renta al pagar).",
+    )
     dias_credito = models.PositiveSmallIntegerField(
         "Días de crédito", default=30, help_text="Plazo habitual para cobrarle a este cliente."
     )
@@ -68,6 +76,18 @@ class Cliente(models.Model):
 
     def get_absolute_url(self):
         return reverse("clientes:detalle", args=[self.pk])
+
+    @property
+    def faltan_para_facturar(self):
+        """Datos que el SRI exige en una factura y que a este cliente le faltan."""
+        faltan = []
+        if not self.identificacion:
+            faltan.append("RUC/cédula")
+        if not self.direccion:
+            faltan.append("dirección")
+        if not self.email:
+            faltan.append("email")
+        return faltan
 
     @property
     def tipo_identificacion(self):

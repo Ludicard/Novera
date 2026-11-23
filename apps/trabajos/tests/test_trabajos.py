@@ -232,3 +232,35 @@ class MenusYPermisosTests(Base):
         self.assertEqual(r.context["kpis"]["atrasadas"], 1)
         self.assertEqual(r.context["kpis"]["sin_tecnico"], 1)
         self.assertContains(r, atrasada.numero)
+
+
+class ClienteDatosFacturacionTests(Base):
+    def setUp(self):
+        super().setUp()
+        entrar_como(self.client, User.objects.create_user("mana", password=CLAVE), MANAGER)
+
+    def test_manager_crea_cliente_con_retencion_y_contacto(self):
+        r = self.client.post(reverse("clientes:nuevo"), {
+            "nombre": "Conjunto Las Lomas", "identificacion": "1790000002001", "agente_retencion": "on",
+            "email": "admin@laslomas.test", "direccion": "Av. Siempre Viva 456", "telefono": "022222222",
+            "telefono_contacto": "Sr. Pérez 0991234567", "dias_credito": 30, "activo": "on", "notas": "",
+        })
+        c = Cliente.objects.get(nombre="Conjunto Las Lomas")
+        self.assertRedirects(r, c.get_absolute_url())
+        self.assertTrue(c.agente_retencion)
+        self.assertEqual(c.telefono_contacto, "Sr. Pérez 0991234567")
+        self.assertEqual(c.faltan_para_facturar, [])
+        r = self.client.get(c.get_absolute_url())
+        self.assertContains(r, "Agente de retención")
+        self.assertNotContains(r, "Faltan datos para facturar")
+
+    def test_aviso_de_datos_incompletos(self):
+        self.assertEqual(self.cliente.faltan_para_facturar, ["RUC/cédula", "email"])  # tiene dirección
+        self.assertContains(self.client.get(self.cliente.get_absolute_url()), "Faltan datos para facturar")
+        r = self.client.get(reverse("clientes:lista") + "?incompletos=1")
+        self.assertEqual(list(r.context["pagina"]), [Cliente.objects.get(pk=self.cliente.pk)])
+
+    def test_aviso_en_la_factura(self):
+        entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
+        r = self.client.get(reverse("facturas:nueva"))
+        self.assertIn(str(self.cliente.pk), r.context["faltantes_clientes"])

@@ -76,4 +76,16 @@
       }
     });
   });
+
+  // Aviso si al cliente elegido le faltan datos para una factura válida
+  const faltantes = JSON.parse((document.getElementById("faltantes-clientes") || {}).textContent || "{}");
+  const avisoCliente = document.createElement("small");
+  avisoCliente.className = "ambar";
+  cliente.closest(".campo").appendChild(avisoCliente);
+  function revisarCliente() {
+    const f = faltantes[cliente.value];
+    avisoCliente.textContent = f ? `⚠ A este cliente le faltan datos para facturar: ${f}. Complétalos en su ficha.` : "";
+  }
+  cliente.addEventListener("change", revisarCliente);
+  revisarCliente();
 })();

@@ -6,8 +6,20 @@ from .models import Cliente, Equipo
 class ClienteForm(forms.ModelForm):
     class Meta:
         model = Cliente
-        fields = ["nombre", "identificacion", "email", "telefono", "direccion", "dias_credito", "activo", "notas"]
-        widgets = {"notas": forms.Textarea(attrs={"rows": 3})}
+        fields = [
+            "nombre", "identificacion", "agente_retencion", "email", "direccion", "telefono", "telefono_contacto",
+            "dias_credito", "activo", "notas",
+        ]
+        widgets = {
+            "notas": forms.Textarea(attrs={"rows": 3}),
+            "telefono_contacto": forms.TextInput(attrs={"placeholder": "Ej.: Sr. Pérez (administrador) 099 123 4567"}),
+        }
+        labels = {"nombre": "Nombre o razón social"}
+        help_texts = {
+            "identificacion": "Obligatorio para facturar: 13 dígitos (RUC) o 10 (cédula).",
+            "email": "Para facturar: ahí llega la factura electrónica.",
+            "direccion": "Para facturar: dirección del cliente.",
+        }
 
     def clean_nombre(self):
         nombre = " ".join(self.cleaned_data["nombre"].split())
@@ -27,7 +39,7 @@ class ClienteForm(forms.ModelForm):
 
 class ClienteRapidoForm(ClienteForm):
     class Meta(ClienteForm.Meta):
-        fields = ["nombre", "identificacion", "email", "dias_credito"]
+        fields = ["nombre", "identificacion", "agente_retencion", "email", "dias_credito"]
 
 
 class EquipoForm(forms.ModelForm):

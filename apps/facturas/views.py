@@ -343,6 +343,14 @@ def _dias_credito_clientes():
     return {str(pk): dias for pk, dias in Cliente.objects.values_list("pk", "dias_credito")}
 
 
+def _faltantes_clientes():
+    """{pk: «RUC/cédula, dirección…»} de los clientes activos a los que les faltan datos para facturar."""
+    return {
+        str(c.pk): ", ".join(c.faltan_para_facturar)
+        for c in Cliente.objects.filter(activo=True).filter(Q(identificacion="") | Q(direccion="") | Q(email=""))
+    }
+
+
 @login_required
 def nueva(request):
     inicial = {}
@@ -374,7 +382,8 @@ def nueva(request):
     return render(
         request,
         "facturas/form.html",
-        {"form": form, "titulo": "Generar factura o recibo", "dias_clientes": _dias_credito_clientes()},
+        {"form": form, "titulo": "Generar factura o recibo", "dias_clientes": _dias_credito_clientes(),
+         "faltantes_clientes": _faltantes_clientes()},
     )
 
 
@@ -392,7 +401,8 @@ def editar(request, pk):
     return render(
         request,
         "facturas/form.html",
-        {"form": form, "titulo": f"Editar {factura.numero}", "factura": factura, "dias_clientes": _dias_credito_clientes()},
+        {"form": form, "titulo": f"Editar {factura.numero}", "factura": factura, "dias_clientes": _dias_credito_clientes(),
+         "faltantes_clientes": _faltantes_clientes()},
     )
 
 

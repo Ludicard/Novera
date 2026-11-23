@@ -11,6 +11,7 @@
   </select>
   <label class="interruptor"><input type="checkbox" name="con_saldo" value="1" {% if request.GET.con_saldo %}checked{% endif %} onchange="this.form.submit()"> Solo con saldo</label>
   {% endif %}
+  <label class="interruptor"><input type="checkbox" name="incompletos" value="1" {% if request.GET.incompletos %}checked{% endif %} onchange="this.form.submit()"> Solo con datos incompletos</label>
   <button class="boton">Buscar</button>
 </form>
 <div class="tarjeta sin-relleno desplazable">
@@ -20,9 +21,13 @@
   <tbody>
   {% for c in pagina %}
     <tr class="fila {% if not c.activo %}inactiva{% endif %}" data-url="{{ c.get_absolute_url }}" onclick="if(!event.target.closest('a'))location=this.dataset.url">
-      <td><a class="numero" href="{{ c.get_absolute_url }}">{{ c.nombre }}</a>{% if not c.activo %}<small class="tenue bloque">inactivo</small>{% endif %}</td>
+      <td><a class="numero" href="{{ c.get_absolute_url }}">{{ c.nombre }}</a>
+        {% if not c.activo %}<small class="tenue bloque">inactivo</small>{% endif %}
+        {% if c.agente_retencion %}<small class="bloque tenue">Agente de retención</small>{% endif %}
+        {% with faltan=c.faltan_para_facturar %}{% if faltan and c.activo %}<small class="bloque ambar" title="Faltan: {{ faltan|join:', ' }}">⚠ Faltan datos para facturar</small>{% endif %}{% endwith %}</td>
       <td class="nowrap">{{ c.identificacion|default:"—" }}</td>
-      <td class="ocultar-movil">{{ c.telefono|default:"" }}{% if c.telefono and c.email %} · {% endif %}{{ c.email|default:"" }}{% if not c.telefono and not c.email %}—{% endif %}</td>
+      <td class="ocultar-movil">{{ c.telefono|default:"" }}{% if c.telefono and c.email %} · {% endif %}{{ c.email|default:"" }}{% if not c.telefono and not c.email %}—{% endif %}
+        {% if c.telefono_contacto %}<small class="tenue bloque">Contacto: {{ c.telefono_contacto }}</small>{% endif %}</td>
       <td class="num">{{ c.num_equipos }}</td>
       {% if rol == "administrador" %}<td class="num ocultar-movil">{{ c.facturado|dinero }}</td><td class="num"><strong>{{ c.saldo|dinero }}</strong></td>{% endif %}
     </tr>

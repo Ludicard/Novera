@@ -25,6 +25,8 @@ def lista(request):
         clientes = clientes.filter(Q(nombre__icontains=q) | Q(identificacion__icontains=q))
     if request.GET.get("con_saldo"):
         clientes = clientes.filter(saldo__gt=0)
+    if request.GET.get("incompletos"):
+        clientes = clientes.filter(activo=True).filter(Q(identificacion="") | Q(direccion="") | Q(email=""))
     orden = request.GET.get("orden", "nombre")
     clientes = clientes.order_by("-saldo", "nombre") if orden == "saldo" else clientes.order_by("nombre")
     pagina = Paginator(clientes, 50).get_page(request.GET.get("page"))
