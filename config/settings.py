@@ -55,6 +55,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.usuarios.middleware.EmpresaMiddleware",
     "apps.usuarios.middleware.RolMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -149,17 +150,8 @@ NOVERA_SERIE_FACTURA = os.environ.get("NOVERA_SERIE_FACTURA", "001-001")
 NOVERA_IVA_DEFECTO = 15
 NOVERA_DIAS_CREDITO_DEFECTO = 30
 
-# Datos del emisor: se editan en Novera → Configuración (base de datos). Estas variables solo son el respaldo
-# si todavía no se ha guardado nada allí.
-NOVERA_EMPRESA = {
-    "razon_social": os.environ.get("NOVERA_EMPRESA_RAZON_SOCIAL", ""),
-    "nombre_comercial": os.environ.get("NOVERA_EMPRESA_NOMBRE_COMERCIAL", ""),
-    "ruc": os.environ.get("NOVERA_EMPRESA_RUC", ""),
-    "direccion": os.environ.get("NOVERA_EMPRESA_DIRECCION", ""),
-    "telefono": os.environ.get("NOVERA_EMPRESA_TELEFONO", ""),
-    "email": os.environ.get("NOVERA_EMPRESA_EMAIL", ""),
-    "web": os.environ.get("NOVERA_EMPRESA_WEB", ""),
-}
-# Logo de respaldo para los PDF si no se subió uno en Configuración: static/img/logo-empresa.png
-NOVERA_LOGO = "img/logo-empresa.png"
+# Datos del emisor de cada empresa: se editan en Novera → Configuración (base de datos).
+
+# Registro abierto: cualquiera puede crear su empresa desde /cuentas/registro/ y queda como su Administrador.
+NOVERA_REGISTRO_ABIERTO = env_bool("NOVERA_REGISTRO_ABIERTO", True)
 

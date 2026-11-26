@@ -379,9 +379,11 @@ def tecnicos_lista(request):
 
 
 def tecnicos_y_desactivados():
-    from django.contrib.auth import get_user_model
+    """Cuentas con rol Técnico de la empresa activa (habilitadas o no)."""
+    from apps.configuracion.actual import empresa_actual
+    from apps.usuarios.models import cuentas_de
 
-    return get_user_model().objects.filter(groups__name=ROLES[TECNICO]).distinct().order_by("-is_active", "first_name", "username")
+    return cuentas_de(empresa_actual()).filter(groups__name=ROLES[TECNICO]).distinct().order_by("-is_active", "first_name", "username")
 
 
 def _solo_tecnico(usuario):
@@ -412,12 +414,11 @@ def tecnico_nuevo(request):
 
 @requiere_rol(MANAGER)
 def tecnico_editar(request, pk):
-    from django.contrib.auth import get_user_model
     from django.contrib.auth import update_session_auth_hash
 
     from apps.usuarios.forms import GRADOS_SUGERIDOS, TecnicoForm
 
-    usuario = get_object_or_404(get_user_model(), pk=pk)
+    usuario = get_object_or_404(tecnicos_y_desactivados(), pk=pk)
     if not _solo_tecnico(usuario):
         messages.error(request, "Esa cuenta tiene otros roles: se administra desde Usuarios.")
         return redirect("trabajos:tecnicos")
@@ -446,9 +447,8 @@ def tecnico_editar(request, pk):
 @require_POST
 def tecnico_habilitar(request, pk):
     """Habilita o deshabilita la cuenta del técnico (deshabilitada: no puede iniciar sesión)."""
-    from django.contrib.auth import get_user_model
 
-    usuario = get_object_or_404(get_user_model(), pk=pk)
+    usuario = get_object_or_404(tecnicos_y_desactivados(), pk=pk)
     if not _solo_tecnico(usuario) or usuario == request.user:
         messages.error(request, "Esa cuenta no se puede habilitar o deshabilitar desde aquí.")
         return redirect("trabajos:tecnicos")
@@ -466,7 +466,6 @@ def tecnico_habilitar(request, pk):
 def proforma_pdf(request, pk):
     """Proforma en PDF tamaño carta (estructura tipo RIDE: emisor, cliente, detalle, totales, condiciones)."""
     from django.conf import settings
-    from django.contrib.staticfiles import finders
     from django.http import HttpResponse
     from django.template.loader import render_to_string
     from django.utils.text import slugify
@@ -478,10 +477,10 @@ def proforma_pdf(request, pk):
     if not p.autorizada:
         messages.error(request, "El PDF se puede generar cuando el Manager haya autorizado la proforma.")
         return redirect(p)
-    empresa = datos_emisor()
-    logo = empresa.get("logo_ruta") or finders.find(settings.NOVERA_LOGO)
+    empresa = datos_emisor(request.empresa)
+    logo = empresa.get("logo_ruta")
     html = render_to_string("trabajos/proforma_pdf.html", {
-        "p": p, "lineas": p.lineas.all(), "empresa": empresa, "tema": tema_proforma(),
+        "p": p, "lineas": p.lineas.all(), "empresa": empresa, "tema": tema_proforma(request.empresa),
         "logo": f"file://{logo}" if logo else None,
         "elaborado_por": (p.creado_por.get_full_name() or p.creado_por.username) if p.creado_por else "",
     })

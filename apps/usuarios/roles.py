@@ -50,12 +50,13 @@ def es_administrador(usuario):
     return ADMINISTRADOR in roles_de(usuario)
 
 
-def administradores_activos(excluir=None):
-    """Cuentas activas con acceso de Administrador (por rol o por ser superusuario)."""
-    from django.contrib.auth import get_user_model
+def administradores_activos(empresa, excluir=None):
+    """Cuentas activas de la empresa con acceso de Administrador (por rol o por ser superusuario)."""
     from django.db.models import Q
 
-    qs = get_user_model().objects.filter(is_active=True).filter(
+    from .models import cuentas_de
+
+    qs = cuentas_de(empresa).filter(is_active=True).filter(
         Q(groups__name=ROLES[ADMINISTRADOR]) | Q(is_superuser=True)
     )
     if excluir is not None:

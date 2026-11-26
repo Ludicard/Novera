@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from apps.usuarios.tests.utils import TestCase
 from django.urls import reverse
 
 from apps.usuarios.roles import ADMINISTRADOR, MANAGER, TECNICO, asignar_roles, roles_de

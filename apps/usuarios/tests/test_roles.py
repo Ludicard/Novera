@@ -1,5 +1,5 @@
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from apps.usuarios.tests.utils import TestCase
 from django.urls import reverse
 
 from apps.usuarios.roles import (

@@ -24,6 +24,21 @@ cada factura se calcula solo.
 - Panel de administración de Django en `/admin/` (incluye la acción «Fusionar clientes» para unificar
   un mismo cliente escrito de varias formas).
 
+### Varias empresas
+
+Cada cuenta pertenece a **una empresa** y solo ve los datos de esa empresa, según lo que permita su rol.
+
+- **Registro** (`/cuentas/registro/`, enlace «Crea tu empresa» en la pantalla de ingreso): quien se registra escribe
+  el nombre de su empresa y queda como su **Administrador**. Se cierra con `NOVERA_REGISTRO_ABIERTO=0` en el `.env`.
+- Las cuentas que crea el Administrador en **Usuarios** (y los técnicos que crea el Manager) quedan en su empresa.
+- **Barra superior:** logo de la empresa + «Novera» + el nombre de la empresa. El nombre y el logo se cambian en
+  **Configuración**. Si no hay nombre guardado, sale «Empresa».
+- Cada empresa tiene su propia numeración (`PF-00001`, `OT-00001`, facturas), sus formas de pago y su color.
+- Técnica: `apps/configuracion/actual.py`. `EmpresaMiddleware` activa la empresa de la cuenta en cada petición y
+  los modelos con datos de empresa usan un gestor que filtra por ella. Fuera de una petición (consola) no hay empresa
+  activa: los comandos que escriben datos piden `--empresa <id>`.
+- Al migrar, los datos y cuentas que ya existían pasan a la primera empresa.
+
 ### Menú de inicio y roles
 
 Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de mosaicos según el rol:
@@ -43,10 +58,10 @@ Tras iniciar sesión y elegir rol, la pantalla de inicio muestra un menú de mos
   totales, información adicional, condiciones y firmas—. En Ecuador la proforma no tiene formato oficial ni validez
   tributaria; el PDF lo indica al pie. Generado con WeasyPrint.
   - **Datos del emisor y logo:** se cargan en Novera → menú de la cuenta → **Configuración** (solo rol
-    Administrador). Se guardan en la base de datos del servidor (un único registro) y el logo en
-    `media/configuracion/` (volumen del servidor, sin URL pública: se entrega solo con sesión). El logo se valida
+    Administrador). Se guardan en la base de datos del servidor (uno por empresa) y el logo en
+    `media/configuracion/empresa-<id>/` (volumen del servidor, sin URL pública: se entrega solo con sesión). El logo se valida
     (PNG/JPG reales, ≤ 2 MB), se re-codifica a PNG limpio y se reduce a 1200 px. Se registra quién hizo el último cambio.
-  - Respaldo si aún no se configuró: variables `NOVERA_EMPRESA_*` del `.env` y `static/img/logo-empresa.png`.
+  - Si falta la razón social, el PDF usa el nombre de la empresa.
 - **Orden de trabajo** (`OT-00001`): cliente, **equipos** del cliente, técnicos asignados con sus instrucciones,
   lugar, horas estimadas, inicio y fin, materiales y herramientas. Estados: pendiente, en curso, terminada, cancelada.
 - **Informe** del técnico: trabajo realizado, horas, materiales usados, observaciones; puede marcar la orden como
@@ -187,8 +202,8 @@ O desde el servidor:
 
 ```bash
 docker compose cp "facturas.xlsm" web:/tmp/base.xlsm
-docker compose exec web python manage.py importar_excel /tmp/base.xlsm --avisos           # simulación
-docker compose exec web python manage.py importar_excel /tmp/base.xlsm --aplicar          # guardar
+docker compose exec web python manage.py importar_excel /tmp/base.xlsm --empresa 1 --avisos    # simulación
+docker compose exec web python manage.py importar_excel /tmp/base.xlsm --empresa 1 --aplicar   # guardar
 ```
 
 Cómo interpreta el Excel:

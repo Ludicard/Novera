@@ -11,7 +11,8 @@ from django.urls import Resolver404, resolve
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .forms import CuentaForm
+from .forms import CuentaForm, RegistroForm
+from .models import cuentas_de, unir_a_empresa
 from .roles import (
     ADMINISTRADOR, COOKIE_ULTIMO_ROL, DESCRIPCIONES, ROLES, SESION_ROL, administradores_activos, asignar_roles,
     roles_de,
@@ -81,6 +82,33 @@ def elegir_rol(request):
     )
 
 
+# ---------------------------------------------------------------- registro de una empresa nueva
+
+
+def registro(request):
+    """Crear una empresa: la cuenta que se registra queda como su Administrador y entra directamente."""
+    from django.conf import settings
+    from django.contrib.auth import login
+    from django.http import Http404
+
+    if not settings.NOVERA_REGISTRO_ABIERTO:
+        raise Http404
+    if request.user.is_authenticated:
+        return redirect("inicio")
+    form = RegistroForm(request.POST or None)
+    if form.is_valid():
+        usuario = form.crear()
+        login(request, usuario, backend=settings.AUTHENTICATION_BACKENDS[0])
+        request.session[SESION_ROL] = ADMINISTRADOR
+        messages.success(
+            request,
+            f"Empresa «{usuario.perfil.empresa.nombre_visible}» creada. Eres su Administrador: crea las cuentas "
+            "de tu equipo en Usuarios y completa los datos de la empresa en Configuración.",
+        )
+        return redirect("inicio")
+    return render(request, "registration/registro.html", {"form": form})
+
+
 # ---------------------------------------------------------------- gestión de cuentas (Administrador)
 
 
@@ -104,7 +132,8 @@ def _puede_editar(actor, usuario):
 def usuarios_lista(request):
     q = request.GET.get("q", "").strip()
     estado = request.GET.get("estado", "activas")
-    cuentas = Usuario.objects.prefetch_related("groups").order_by("-is_active", "first_name", "username")
+    propias = cuentas_de(request.empresa)
+    cuentas = propias.prefetch_related("groups").order_by("-is_active", "first_name", "username")
     if q:
         cuentas = cuentas.filter(
             Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(email__icontains=q)
@@ -120,8 +149,8 @@ def usuarios_lista(request):
     return render(request, "usuarios/lista.html", {
         "pagina": pagina, "q": q, "estado": estado,
         "conteos": {
-            "activas": Usuario.objects.filter(is_active=True).count(),
-            "desactivadas": Usuario.objects.filter(is_active=False).count(),
+            "activas": propias.filter(is_active=True).count(),
+            "desactivadas": propias.filter(is_active=False).count(),
         },
     })
 
@@ -133,6 +162,7 @@ def usuario_nuevo(request):
         u = form.save(commit=False)
         u.set_password(form.cleaned_data["password1"])
         u.save()
+        unir_a_empresa(u, request.empresa)  # la cuenta nueva queda en la empresa de quien la crea
         asignar_roles(u, form.cleaned_data["roles"])
         roles = ", ".join(ROLES[c] for c in form.cleaned_data["roles"])
         messages.success(request, f"Cuenta «{u.username}» creada ({roles}). Ya puede iniciar sesión.")
@@ -142,7 +172,7 @@ def usuario_nuevo(request):
 
 @solo_administrador
 def usuario_editar(request, pk):
-    usuario = get_object_or_404(Usuario, pk=pk)
+    usuario = get_object_or_404(cuentas_de(request.empresa), pk=pk)
     if not _puede_editar(request.user, usuario):
         messages.error(request, "Esta cuenta es de un superusuario: solo otro superusuario puede modificarla.")
         return redirect("usuarios:lista")
@@ -171,12 +201,12 @@ def usuario_editar(request, pk):
 @solo_administrador
 @require_POST
 def usuario_activar(request, pk):
-    usuario = get_object_or_404(Usuario, pk=pk)
+    usuario = get_object_or_404(cuentas_de(request.empresa), pk=pk)
     if not _puede_editar(request.user, usuario) or usuario == request.user:
         messages.error(request, "No puedes cambiar el estado de esta cuenta.")
         return redirect("usuarios:lista")
     activar = not usuario.is_active
-    if not activar and ADMINISTRADOR in roles_de(usuario) and not administradores_activos(excluir=usuario).exists():
+    if not activar and ADMINISTRADOR in roles_de(usuario) and not administradores_activos(request.empresa, excluir=usuario).exists():
         messages.error(request, "Debe quedar al menos un Administrador activo.")
         return redirect("usuarios:lista")
     usuario.is_active = activar

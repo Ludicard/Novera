@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Sin empresa{% endblock %}
+{% block barra %}<header class="topbar"><span class="marca">Novera</span></header>{% endblock %}
+{% block content %}
+<div class="tarjeta vacio">
+  <h2>Tu cuenta no pertenece a ninguna empresa</h2>
+  <p>Pide al Administrador de tu empresa que te cree una cuenta desde Usuarios, o crea tu propia empresa.</p>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="boton">Cerrar sesión</button></form>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Crear empresa{% endblock %}
+{% block content %}
+<div class="registro">
+  <h1>Novera</h1>
+  <p class="tenue">Crea tu empresa. Serás su Administrador y podrás crear las cuentas de tu equipo (Managers y Técnicos).</p>
+  <form method="post" class="tarjeta formulario cuenta-form" novalidate>
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
+    <h2>Tu empresa</h2>
+    <div class="campos">
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.empresa %}</div>
+    </div>
+    <h2 class="seccion">Tu cuenta de Administrador</h2>
+    <div class="campos">
+      {% include "usuarios/_campo.html" with campo=form.first_name %}
+      {% include "usuarios/_campo.html" with campo=form.last_name %}
+      {% include "usuarios/_campo.html" with campo=form.username %}
+      {% include "usuarios/_campo.html" with campo=form.email %}
+      {% include "usuarios/_campo.html" with campo=form.password1 %}
+      {% include "usuarios/_campo.html" with campo=form.password2 %}
+    </div>
+    <div class="acciones"><button class="boton primario">Crear empresa</button><a href="{% url 'login' %}">Ya tengo cuenta</a></div>
+  </form>
+</div>
+{% endblock %}

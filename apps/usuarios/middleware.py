@@ -28,9 +28,38 @@ def ruta_libre(ruta):
     return ruta.startswith(PREFIJOS_LIBRES) or ruta in {
         reverse("logout"),
         reverse("login"),
+        reverse("registro"),
         reverse("admin:logout"),
         reverse("usuarios:elegir_rol"),
     }
+
+
+class EmpresaMiddleware:
+    """Pone en la petición la empresa de la cuenta (`request.empresa`) y la deja activa mientras dura la petición:
+    los datos de clientes, facturas, proformas y órdenes se filtran con ella (ver `apps/configuracion/actual.py`).
+
+    Una cuenta sin empresa no puede usar la app (salvo un superusuario en el admin de Django).
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from apps.configuracion.actual import activar, desactivar
+
+        from .models import empresa_de
+
+        usuario = getattr(request, "user", None)
+        request.empresa = empresa_de(usuario)
+        if request.empresa is None and usuario is not None and usuario.is_authenticated:
+            ruta = request.path
+            if not (ruta_libre(ruta) or (usuario.is_superuser and ruta.startswith("/admin/"))):
+                return render(request, "usuarios/sin_empresa.html", status=403)
+        token = activar(request.empresa)
+        try:
+            return self.get_response(request)
+        finally:
+            desactivar(token)
 
 
 class RolMiddleware:

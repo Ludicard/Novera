@@ -4,7 +4,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import openpyxl
-from django.test import TestCase
+from apps.usuarios.tests.utils import TestCase
 
 from apps.clientes.models import Cliente
 from apps.facturas import importador as imp

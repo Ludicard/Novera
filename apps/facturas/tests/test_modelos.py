@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.test import TestCase
+from apps.usuarios.tests.utils import TestCase
 
 from apps.clientes.models import Cliente
 from apps.facturas.models import Estado, Factura, Pago

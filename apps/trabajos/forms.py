@@ -1,6 +1,5 @@
 from django import forms
 from django.db.models import Q
-from django.contrib.auth import get_user_model
 from django.forms import inlineformset_factory
 
 from apps.clientes.models import Cliente, Equipo
@@ -12,10 +11,17 @@ FECHA = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 TASAS_IVA = [("15", "15 %"), ("12", "12 %"), ("5", "5 %"), ("0", "0 %")]
 
 
+def cuentas_empresa():
+    from apps.configuracion.actual import empresa_actual
+    from apps.usuarios.models import cuentas_de
+
+    return cuentas_de(empresa_actual())
+
+
 def tecnicos():
-    """Cuentas activas con el rol Técnico."""
+    """Cuentas activas con el rol Técnico de la empresa activa."""
     return (
-        get_user_model().objects.filter(is_active=True, groups__name=ROLES[TECNICO])
+        cuentas_empresa().filter(is_active=True, groups__name=ROLES[TECNICO])
         .distinct().order_by("first_name", "username")
     )
 
@@ -143,7 +149,7 @@ class OrdenForm(ClientesActivosMixin, forms.ModelForm):
         # Técnicos activos, más los ya asignados a esta orden aunque hoy estén deshabilitados
         asignados = list(self.instance.tecnicos.values_list("pk", flat=True)) if self.instance.pk else []
         self.fields["tecnicos"].queryset = (
-            get_user_model().objects
+            cuentas_empresa()
             .filter(Q(is_active=True, groups__name=ROLES[TECNICO]) | Q(pk__in=asignados))
             .distinct().order_by("first_name", "username")
         )

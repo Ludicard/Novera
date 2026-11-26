@@ -222,11 +222,15 @@ class FiltroFacturasForm(forms.Form):
     estado = forms.ChoiceField(
         required=False, choices=[("", "Todos"), ("ABIERTAS", "Por cobrar")] + list(Estado.choices)
     )
-    cliente = forms.ModelChoiceField(required=False, queryset=Cliente.objects.all(), empty_label="Todos")
+    cliente = forms.ModelChoiceField(required=False, queryset=Cliente.objects.none(), empty_label="Todos")
     desde = forms.DateField(required=False, label="Periodo desde", widget=MES, input_formats=["%Y-%m"])
     hasta = forms.DateField(required=False, label="hasta", widget=MES, input_formats=["%Y-%m"])
     emitida_desde = forms.DateField(required=False, label="Emitida desde", widget=FECHA)
     emitida_hasta = forms.DateField(required=False, label="hasta", widget=FECHA)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["cliente"].queryset = Cliente.objects.all()  # de la empresa activa (no al importar el módulo)
 
 
 class ImportarForm(forms.Form):

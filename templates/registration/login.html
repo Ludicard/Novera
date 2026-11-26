@@ -12,5 +12,6 @@
     <input type="hidden" name="next" value="{{ next }}">
     <button class="boton primario ancho">Ingresar</button>
   </form>
+  {% if registro_abierto %}<p class="tenue registro-enlace">¿Tu empresa aún no usa Novera? <a href="{% url 'registro' %}">Crea tu empresa</a></p>{% endif %}
 </div>
 {% endblock %}

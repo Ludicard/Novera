@@ -15,7 +15,10 @@
 <body>
 {% block barra %}{% if user.is_authenticated %}
 <header class="topbar">
-  <a class="marca" href="{% url 'inicio' %}">Novera</a>
+  <a class="marca" href="{% url 'inicio' %}">
+    {% if empresa_actual.logo %}<img class="marca-logo" src="{% url 'configuracion:logo' %}?v={{ empresa_actual.actualizado|date:'U' }}" alt="">{% endif %}
+    <span>Novera</span>{% if empresa_actual %} <span class="marca-empresa">{{ empresa_nombre }}</span>{% endif %}
+  </a>
   {% if rol %}
   <nav class="nav-principal">
     {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}

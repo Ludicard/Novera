@@ -21,6 +21,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.clientes.models import Cliente
+from apps.configuracion.actual import DeEmpresa, por_empresa
 
 MONEDA = DecimalField(max_digits=14, decimal_places=2)
 CENTAVO = Decimal("0.01")
@@ -105,12 +106,12 @@ class FacturaQuerySet(models.QuerySet):
         return None
 
 
-class Factura(models.Model):
+class Factura(DeEmpresa):
     class Tipo(models.TextChoices):
         FACTURA = "FACTURA", "Factura"
         RECIBO = "RECIBO", "Recibo"
 
-    numero = models.CharField("Número", max_length=40, unique=True)
+    numero = models.CharField("Número", max_length=40)
     tipo = models.CharField(max_length=10, choices=Tipo.choices, default=Tipo.FACTURA)
     cliente = models.ForeignKey(
         Cliente, on_delete=models.PROTECT, related_name="facturas", null=True, blank=True
@@ -146,7 +147,7 @@ class Factura(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
-    objects = FacturaQuerySet.as_manager()
+    objects = por_empresa("empresa", FacturaQuerySet)
 
     class Meta:
         ordering = ["-fecha_emision", "-numero"]
@@ -155,8 +156,10 @@ class Factura(models.Model):
             models.Index(fields=["fecha_cobro"]),
         ]
         constraints = [
+            models.UniqueConstraint(fields=["empresa", "numero"], name="factura_numero_unico_por_empresa"),
             models.UniqueConstraint(
-                fields=["clave_acceso"], condition=~models.Q(clave_acceso=""), name="factura_clave_acceso_unica"
+                fields=["empresa", "clave_acceso"], condition=~models.Q(clave_acceso=""),
+                name="factura_clave_acceso_unica_por_empresa",
             ),
         ]
 
@@ -211,6 +214,8 @@ class Pago(models.Model):
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+
+    objects = por_empresa("factura__empresa")
 
     class Meta:
         ordering = ["fecha", "pk"]

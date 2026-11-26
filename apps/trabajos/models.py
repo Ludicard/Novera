@@ -14,15 +14,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.clientes.models import Cliente
+from apps.configuracion.actual import DeEmpresa, por_empresa
 from apps.facturas.models import redondear
 
 CERO = Decimal("0.00")
 
 
-def siguiente_numero(modelo, prefijo):
-    """PF-00001, OT-00001…: el siguiente número correlativo del prefijo."""
+def siguiente_numero(modelo, prefijo, empresa):
+    """PF-00001, OT-00001…: el siguiente número correlativo del prefijo dentro de la empresa."""
     ultimo = 0
-    for numero in modelo.objects.filter(numero__startswith=f"{prefijo}-").values_list("numero", flat=True):
+    numeros = modelo._base_manager.filter(empresa=empresa, numero__startswith=f"{prefijo}-")
+    for numero in numeros.values_list("numero", flat=True):
         sufijo = numero[len(prefijo) + 1:]
         if sufijo.isdigit():
             ultimo = max(ultimo, int(sufijo))
@@ -49,23 +51,39 @@ class UnidadTiempo(models.TextChoices):
     ANIOS = "ANIOS", "años"
 
 
-class FormaPago(models.Model):
-    """Opciones de forma de pago para las proformas (catálogo editable)."""
+FORMAS_PAGO_INICIALES = [
+    "100% Contra entrega",
+    "70% Anticipo 30% Al terminar",
+    "50% Anticipo 50% Al terminar",
+    "40% Anticipo 60% Al terminar",
+]
 
-    nombre = models.CharField(max_length=120, unique=True)
+
+class FormaPago(DeEmpresa):
+    """Opciones de forma de pago para las proformas (catálogo editable de cada empresa)."""
+
+    nombre = models.CharField(max_length=120)
     orden = models.PositiveSmallIntegerField(default=0, help_text="Posición en la lista (menor = primero).")
     activa = models.BooleanField(default=True, help_text="Las inactivas no se ofrecen en proformas nuevas.")
+
+    objects = por_empresa("empresa")
 
     class Meta:
         ordering = ["orden", "nombre"]
         verbose_name = "forma de pago"
         verbose_name_plural = "formas de pago"
+        constraints = [models.UniqueConstraint(fields=["empresa", "nombre"], name="forma_pago_unica_por_empresa")]
 
     def __str__(self):
         return self.nombre
 
+    @classmethod
+    def crear_iniciales(cls, empresa):
+        for i, nombre in enumerate(FORMAS_PAGO_INICIALES, start=1):
+            cls._base_manager.get_or_create(empresa=empresa, nombre=nombre, defaults={"orden": i * 10})
 
-class Proforma(Auditoria):
+
+class Proforma(DeEmpresa, Auditoria):
     """Flujo: se solicita autorización → el Manager la autoriza (o la devuelve con observaciones) →
     se envía al cliente → el Manager la «procesa» (el cliente la aceptó) → se genera la orden de trabajo.
     En cualquier momento tras enviarla puede marcarse como rechazada por el cliente."""
@@ -80,7 +98,7 @@ class Proforma(Auditoria):
         APROBADA = "APROBADA", "Con orden de trabajo"
         RECHAZADA = "RECHAZADA", "Rechazada por el cliente"
 
-    numero = models.CharField("Número", max_length=20, unique=True, editable=False)
+    numero = models.CharField("Número", max_length=20, editable=False)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas")
     fecha = models.DateField(default=timezone.localdate)
     validez_dias = models.PositiveSmallIntegerField("Validez (días)", default=15)
@@ -105,8 +123,11 @@ class Proforma(Auditoria):
     condiciones_generales = models.TextField("Condiciones generales", blank=True)
     notas = models.TextField("Notas internas", blank=True, help_text="No salen en el PDF.")
 
+    objects = por_empresa("empresa")
+
     class Meta:
         ordering = ["-fecha", "-numero"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="proforma_numero_unico_por_empresa")]
 
     def __str__(self):
         return f"{self.numero} · {self.titulo}"
@@ -115,8 +136,9 @@ class Proforma(Auditoria):
         return reverse("trabajos:proforma", args=[self.pk])
 
     def save(self, *args, **kwargs):
+        self.asignar_empresa()
         if not self.numero:
-            self.numero = siguiente_numero(Proforma, "PF")
+            self.numero = siguiente_numero(Proforma, "PF", self.empresa)
         super().save(*args, **kwargs)
 
     @property
@@ -186,6 +208,8 @@ class LineaProforma(models.Model):
     unidad = models.CharField(max_length=20, blank=True, default="u")
     precio_unitario = models.DecimalField("Precio unitario", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
 
+    objects = por_empresa("proforma__empresa")
+
     class Meta:
         ordering = ["pk"]
 
@@ -197,14 +221,14 @@ class LineaProforma(models.Model):
 # ---------------------------------------------------------------- órdenes de trabajo
 
 
-class OrdenTrabajo(Auditoria):
+class OrdenTrabajo(DeEmpresa, Auditoria):
     class Estado(models.TextChoices):
         PENDIENTE = "PENDIENTE", "Pendiente"
         EN_CURSO = "EN_CURSO", "En curso"
         TERMINADA = "TERMINADA", "Terminada"
         CANCELADA = "CANCELADA", "Cancelada"
 
-    numero = models.CharField("Número", max_length=20, unique=True, editable=False)
+    numero = models.CharField("Número", max_length=20, editable=False)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="ordenes")
     proforma = models.OneToOneField(Proforma, on_delete=models.SET_NULL, null=True, blank=True, related_name="orden")
     titulo = models.CharField("Trabajo a realizar", max_length=200)
@@ -225,8 +249,11 @@ class OrdenTrabajo(Auditoria):
     estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
     notas = models.TextField(blank=True)
 
+    objects = por_empresa("empresa")
+
     class Meta:
         ordering = ["-creado"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="orden_numero_unico_por_empresa")]
         verbose_name = "orden de trabajo"
         verbose_name_plural = "órdenes de trabajo"
 
@@ -237,8 +264,9 @@ class OrdenTrabajo(Auditoria):
         return reverse("trabajos:orden", args=[self.pk])
 
     def save(self, *args, **kwargs):
+        self.asignar_empresa()
         if not self.numero:
-            self.numero = siguiente_numero(OrdenTrabajo, "OT")
+            self.numero = siguiente_numero(OrdenTrabajo, "OT", self.empresa)
         super().save(*args, **kwargs)
 
     @property
@@ -253,7 +281,7 @@ class OrdenTrabajo(Auditoria):
     def desde_proforma(cls, proforma, usuario=None):
         """Genera la orden de una proforma aprobada (copia cliente, trabajo y los materiales cotizados)."""
         orden = cls.objects.create(
-            cliente=proforma.cliente, proforma=proforma, titulo=proforma.titulo, descripcion=proforma.descripcion,
+            empresa=proforma.empresa, cliente=proforma.cliente, proforma=proforma, titulo=proforma.titulo, descripcion=proforma.descripcion,
             ubicacion=proforma.cliente.direccion, creado_por=usuario,
         )
         for linea in proforma.lineas.filter(tipo=LineaProforma.Tipo.MATERIAL):
@@ -276,6 +304,8 @@ class Recurso(models.Model):
     cantidad = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1"), validators=[MinValueValidator(Decimal("0.01"))])
     unidad = models.CharField(max_length=20, blank=True, default="u")
 
+    objects = por_empresa("orden__empresa")
+
     class Meta:
         ordering = ["tipo", "pk"]
 
@@ -291,6 +321,8 @@ class Informe(Auditoria):
     materiales_usados = models.TextField("Materiales usados", blank=True)
     observaciones = models.TextField("Observaciones / pendientes", blank=True)
     trabajo_terminado = models.BooleanField("El trabajo de la orden quedó terminado", default=False)
+
+    objects = por_empresa("orden__empresa")
 
     class Meta:
         ordering = ["-fecha", "-creado"]

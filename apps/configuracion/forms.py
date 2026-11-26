@@ -15,7 +15,7 @@ class EmpresaForm(forms.ModelForm):
 
     class Meta:
         model = Empresa
-        fields = ["razon_social", "nombre_comercial", "ruc", "direccion_matriz", "telefono", "email", "web",
+        fields = ["nombre", "razon_social", "nombre_comercial", "ruc", "direccion_matriz", "telefono", "email", "web",
                   "color_app", "color_proforma", "logo"]
         widgets = {
             "ruc": forms.TextInput(attrs={"inputmode": "numeric", "maxlength": 13, "autocomplete": "off"}),
@@ -23,6 +23,14 @@ class EmpresaForm(forms.ModelForm):
             "color_app": forms.TextInput(attrs={"placeholder": "#1F4E5F", "maxlength": 7, "data-color": "1", "autocomplete": "off"}),
             "color_proforma": forms.TextInput(attrs={"placeholder": "#1F4E5F", "maxlength": 7, "data-color": "1", "autocomplete": "off"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["nombre"].required = True
+        self.fields["nombre"].widget.attrs.setdefault("placeholder", "Ej.: EmpresaAutos")
+
+    def clean_nombre(self):
+        return " ".join(self.cleaned_data["nombre"].split())
 
     def clean_razon_social(self):
         return " ".join(self.cleaned_data["razon_social"].split())

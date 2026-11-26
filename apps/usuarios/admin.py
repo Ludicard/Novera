@@ -7,6 +7,7 @@ from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import User
 
 from .forms import RolesField
+from .models import PerfilUsuario
 from .roles import ROLES, asignar_roles, roles_de
 
 
@@ -30,12 +31,21 @@ class FormAlta(ConRoles, UserCreationForm):
 admin.site.unregister(User)
 
 
+class PerfilInline(admin.StackedInline):
+    model = PerfilUsuario
+    can_delete = False
+    verbose_name = "Empresa"
+    verbose_name_plural = "Empresa"
+
+
 @admin.register(User)
 class UsuarioAdmin(UserAdmin):
+    inlines = [PerfilInline]
     form = FormCambio
     add_form = FormAlta
-    list_display = ["username", "first_name", "last_name", "email", "roles_novera", "is_active", "last_login"]
-    list_filter = ["is_active", "is_superuser"]
+    list_display = ["username", "first_name", "last_name", "email", "empresa", "roles_novera", "is_active", "last_login"]
+    list_filter = ["is_active", "is_superuser", "perfil__empresa"]
+    list_select_related = ["perfil__empresa"]
     # Sin «groups» ni «user_permissions»: los roles se manejan solo con el campo «Roles»
     fieldsets = (
         (None, {"fields": ("username", "password")}),
@@ -44,6 +54,11 @@ class UsuarioAdmin(UserAdmin):
         ("Fechas", {"fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = ((None, {"classes": ("wide",), "fields": ("username", "roles", "password1", "password2")}),)
+
+    @admin.display(description="Empresa", ordering="perfil__empresa__nombre")
+    def empresa(self, obj):
+        perfil = getattr(obj, "perfil", None)
+        return perfil.empresa if perfil else "— sin empresa —"
 
     @admin.display(description="Roles")
     def roles_novera(self, obj):

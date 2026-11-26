@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 
+from .models import unir_a_empresa
 from .roles import ADMINISTRADOR, ROLES, TECNICO, administradores_activos, roles_de
 
 Usuario = get_user_model()
@@ -38,7 +39,10 @@ class CuentaForm(forms.ModelForm):
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
+        from .models import empresa_de
+
         self.actor = actor
+        self.empresa = empresa_de(actor)
         self.nueva = self.instance.pk is None
         self.fields["first_name"].required = True
         if self.nueva:
@@ -85,7 +89,7 @@ class CuentaForm(forms.ModelForm):
             self.add_error("roles", "No puedes quitarte el rol Administrador a ti mismo.")
         era_admin = u.is_active and ADMINISTRADOR in roles_de(u)
         sigue_admin = activo and (ADMINISTRADOR in roles or u.is_superuser)
-        if era_admin and not sigue_admin and not administradores_activos(excluir=u).exists():
+        if era_admin and not sigue_admin and not administradores_activos(self.empresa, excluir=u).exists():
             self.add_error(None, "Debe quedar al menos un Administrador activo.")
         return datos
 
@@ -130,7 +134,79 @@ class TecnicoForm(CuentaForm):
         from apps.trabajos.models import PerfilTecnico
 
         perfil, _ = PerfilTecnico.objects.get_or_create(usuario=usuario)
+        unir_a_empresa(usuario, self.empresa)
         for campo in self.CAMPOS_PERFIL:
             setattr(perfil, campo, self.cleaned_data.get(campo, "").strip())
         perfil.save()
         return perfil
+
+
+class RegistroForm(forms.ModelForm):
+    """Alta de una empresa nueva: quien se registra crea la empresa y queda como su Administrador."""
+
+    empresa = forms.CharField(
+        label="Nombre de la empresa", max_length=120,
+        help_text="Sale en la barra superior. Puedes cambiarlo después en Configuración.",
+        widget=forms.TextInput(attrs={"placeholder": "Ej.: EmpresaAutos", "autocomplete": "organization"}),
+    )
+    password1 = forms.CharField(label="Contraseña", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+    password2 = forms.CharField(label="Repetir contraseña", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+
+    class Meta:
+        model = Usuario
+        fields = ["first_name", "last_name", "username", "email"]
+        labels = {"first_name": "Tu nombre", "last_name": "Apellidos", "username": "Usuario", "email": "Email"}
+        help_texts = {"username": "Con esto inicias sesión. Letras, números y @ . + - _ (sin espacios)."}
+
+    field_order = ["empresa", "first_name", "last_name", "username", "email", "password1", "password2"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["first_name"].required = True
+        self.fields["email"].required = True
+        self.fields["username"].widget.attrs.update({"autocapitalize": "none", "autocomplete": "username"})
+
+    def clean_empresa(self):
+        nombre = " ".join(self.cleaned_data["empresa"].split())
+        if not nombre:
+            raise forms.ValidationError("Escribe el nombre de la empresa.")
+        return nombre
+
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+        if Usuario.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError("Ya existe una cuenta con ese usuario.")
+        return username
+
+    def clean(self):
+        datos = super().clean()
+        p1, p2 = datos.get("password1") or "", datos.get("password2") or ""
+        if p1 != p2:
+            self.add_error("password2", "Las contraseñas no coinciden.")
+        elif p1:
+            usuario = Usuario(username=datos.get("username", ""), first_name=datos.get("first_name", ""),
+                              email=datos.get("email", ""))
+            try:
+                password_validation.validate_password(p1, usuario)
+            except forms.ValidationError as e:
+                self.add_error("password1", e)
+        return datos
+
+    def crear(self):
+        """Crea la empresa, la cuenta (Administrador de esa empresa) y las formas de pago iniciales."""
+        from django.db import transaction
+
+        from apps.configuracion.models import Empresa
+        from apps.trabajos.models import FormaPago
+
+        from .roles import asignar_roles
+
+        with transaction.atomic():
+            empresa = Empresa.objects.create(nombre=self.cleaned_data["empresa"])
+            usuario = self.save(commit=False)
+            usuario.set_password(self.cleaned_data["password1"])
+            usuario.save()
+            unir_a_empresa(usuario, empresa)
+            asignar_roles(usuario, [ADMINISTRADOR])
+            FormaPago.crear_iniciales(empresa)
+        return usuario

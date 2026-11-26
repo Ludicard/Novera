@@ -23,13 +23,17 @@
 {% endblock %}
 {% block content %}
 <a class="volver" href="{% url 'inicio' %}">← Inicio</a>
-<div class="encabezado"><div><h1>Configuración</h1><span class="tenue">Datos de la empresa que salen en las proformas en PDF</span></div></div>
+<div class="encabezado"><div><h1>Configuración</h1><span class="tenue">Nombre, logo y colores de la empresa, y los datos que salen en las proformas en PDF</span></div></div>
 
 <div class="rejilla panel">
   <form method="post" enctype="multipart/form-data" class="tarjeta formulario cuenta-form">
     {% csrf_token %}
     {% for e in form.non_field_errors %}<div class="mensaje error">{{ e }}</div>{% endfor %}
-    <h2>Datos del emisor</h2>
+    <h2>Empresa</h2>
+    <div class="campos">
+      <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.nombre %}</div>
+    </div>
+    <h2 class="seccion">Datos del emisor</h2>
     <div class="campos">
       <div class="campo activo">{% include "usuarios/_campo.html" with campo=form.razon_social %}</div>
       {% include "usuarios/_campo.html" with campo=form.nombre_comercial %}

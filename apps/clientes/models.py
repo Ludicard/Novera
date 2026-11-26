@@ -7,6 +7,8 @@ from django.db.models import DecimalField, ExpressionWrapper, F, OuterRef, Subqu
 from django.db.models.functions import Coalesce, Lower
 from django.urls import reverse
 
+from apps.configuracion.actual import DeEmpresa, por_empresa
+
 validar_identificacion = RegexValidator(
     r"^(\d{10}|\d{13})$",
     "Debe tener 10 dígitos (cédula) o 13 dígitos (RUC).",
@@ -39,7 +41,7 @@ class ClienteQuerySet(models.QuerySet):
         ).annotate(saldo=ExpressionWrapper(F("facturado") - F("cobrado"), output_field=MONEDA))
 
 
-class Cliente(models.Model):
+class Cliente(DeEmpresa):
     nombre = models.CharField(max_length=200)
     identificacion = models.CharField(
         "RUC / Cédula", max_length=13, blank=True, validators=[validar_identificacion]
@@ -63,12 +65,12 @@ class Cliente(models.Model):
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
-    objects = ClienteQuerySet.as_manager()
+    objects = por_empresa("empresa", ClienteQuerySet)
 
     class Meta:
         ordering = ["nombre"]
         constraints = [
-            models.UniqueConstraint(Lower("nombre"), name="cliente_nombre_unico"),
+            models.UniqueConstraint(F("empresa"), Lower("nombre"), name="cliente_nombre_unico_por_empresa"),
         ]
 
     def __str__(self):
@@ -117,6 +119,8 @@ class Equipo(models.Model):
     notas = models.TextField(blank=True)
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
+
+    objects = por_empresa("cliente__empresa")
 
     class Meta:
         ordering = ["cliente__nombre", "nombre"]

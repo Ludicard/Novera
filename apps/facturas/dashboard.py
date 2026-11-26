@@ -49,10 +49,15 @@ class FiltroPanelForm(forms.Form):
     desde = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
     hasta = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
     cliente = forms.ModelChoiceField(
-        queryset=Cliente.objects.filter(facturas__isnull=False).distinct(),
+        queryset=Cliente.objects.none(),
         required=False,
         empty_label="Todos los clientes",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Se arma en cada petición: así solo salen los clientes de la empresa activa
+        self.fields["cliente"].queryset = Cliente.objects.filter(facturas__isnull=False).distinct()
 
 
 def sumar_meses(d, n):

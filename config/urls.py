@@ -6,6 +6,7 @@ from django.urls import include, path
 
 from apps.facturas.views import dashboard
 from apps.usuarios.inicio import finanzas, informacion_general, inicio
+from apps.usuarios.views import registro
 
 admin.site.site_header = "Novera · Administración"
 admin.site.site_title = "Novera"
@@ -27,6 +28,7 @@ urlpatterns = [
     path("trabajos/", include("apps.trabajos.urls")),
     path("facturas/", include("apps.facturas.urls")),
     path("clientes/", include("apps.clientes.urls")),
+    path("cuentas/registro/", registro, name="registro"),
     path("cuentas/login/", LoginView.as_view(redirect_authenticated_user=True), name="login"),
     path("cuentas/", include("django.contrib.auth.urls")),
     path("usuarios/", include("apps.usuarios.urls")),
