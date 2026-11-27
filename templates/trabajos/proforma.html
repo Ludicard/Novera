@@ -107,11 +107,12 @@
 
 <div class="rejilla panel">
   <section class="tarjeta">
-    <h2>Forma de pago y garantía</h2>
+    <h2>Forma de pago, garantía y ejecución</h2>
     <dl class="datos">
       <dt>Forma de pago</dt><dd>{{ p.forma_pago|default:"—" }}</dd>
       <dt>Garantía</dt><dd>{{ p.garantia|default:"Sin garantía" }}</dd>
       {% if p.garantia_nota %}<dt>Condiciones</dt><dd class="pre">{{ p.garantia_nota }}</dd>{% endif %}
+      <dt>Tiempo de ejecución</dt><dd>{{ p.tiempo_ejecucion|default:"—" }}{% if p.tiempo_ejecucion and p.ejecucion_nota %}, {{ p.ejecucion_nota }}{% endif %}</dd>
       <dt>Válida hasta</dt><dd>{{ p.valida_hasta|date:"d/m/Y" }}</dd>
     </dl>
   </section>

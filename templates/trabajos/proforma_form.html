@@ -43,10 +43,13 @@
       {% include "usuarios/_campo.html" with campo=form.garantia_cantidad %}
       {% include "usuarios/_campo.html" with campo=form.garantia_unidad %}
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.garantia_nota %}</div>
+      {% include "usuarios/_campo.html" with campo=form.ejecucion_cantidad %}
+      {% include "usuarios/_campo.html" with campo=form.ejecucion_unidad %}
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.ejecucion_nota %}</div>
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.condiciones_generales %}</div>
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.notas %}</div>
     </div>
-    <p class="tenue">La forma de pago, la garantía y las condiciones salen en el PDF; las notas internas no.</p>
+    <p class="tenue">La forma de pago, la garantía, el tiempo de ejecución y las condiciones salen en el PDF; las notas internas no.</p>
   </section>
   <div class="acciones">
     <button class="boton primario">{% if rol == "manager" %}Guardar y autorizar{% else %}Solicitar autorización{% endif %}</button>

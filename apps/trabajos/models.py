@@ -51,6 +51,13 @@ class UnidadTiempo(models.TextChoices):
     ANIOS = "ANIOS", "años"
 
 
+class UnidadEjecucion(models.TextChoices):
+    DIAS_LABORABLES = "DIAS_LAB", "días laborables"
+    DIAS = "DIAS", "días"
+    SEMANAS = "SEMANAS", "semanas"
+    MESES = "MESES", "meses"
+
+
 FORMAS_PAGO_INICIALES = [
     "100% Contra entrega",
     "70% Anticipo 30% Al terminar",
@@ -120,6 +127,11 @@ class Proforma(DeEmpresa, Auditoria):
     garantia_cantidad = models.PositiveSmallIntegerField("Garantía", null=True, blank=True)
     garantia_unidad = models.CharField(max_length=6, choices=UnidadTiempo.choices, default=UnidadTiempo.MESES, blank=True)
     garantia_nota = models.TextField("Condiciones de la garantía", blank=True)
+    ejecucion_cantidad = models.PositiveSmallIntegerField("Tiempo de ejecución", null=True, blank=True)
+    ejecucion_unidad = models.CharField(
+        max_length=8, choices=UnidadEjecucion.choices, default=UnidadEjecucion.DIAS_LABORABLES, blank=True
+    )
+    ejecucion_nota = models.CharField("Desde cuándo se cuenta", max_length=200, blank=True)
     condiciones_generales = models.TextField("Condiciones generales", blank=True)
     notas = models.TextField("Notas internas", blank=True, help_text="No salen en el PDF.")
 
@@ -162,6 +174,16 @@ class Proforma(DeEmpresa, Auditoria):
         if self.garantia_cantidad == 1:
             unidad = {"días": "día", "meses": "mes", "años": "año"}[unidad]
         return f"{self.garantia_cantidad} {unidad}"
+
+    @property
+    def tiempo_ejecucion(self):
+        """«15 días laborables», «1 semana»… o vacío si no se indicó."""
+        if not self.ejecucion_cantidad:
+            return ""
+        unidad = UnidadEjecucion(self.ejecucion_unidad or UnidadEjecucion.DIAS_LABORABLES).label
+        if self.ejecucion_cantidad == 1:
+            unidad = {"días laborables": "día laborable", "días": "día", "semanas": "semana", "meses": "mes"}[unidad]
+        return f"{self.ejecucion_cantidad} {unidad}"
 
     @property
     def valida_hasta(self):

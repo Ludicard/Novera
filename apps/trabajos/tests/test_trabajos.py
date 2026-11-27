@@ -441,6 +441,24 @@ class ProformaPdfTests(Base):
         self.p.garantia_unidad = "ANIOS"
         self.assertEqual(self.p.garantia, "1 año")
 
+    def test_tiempo_de_ejecucion(self):
+        self.assertEqual(self.p.tiempo_ejecucion, "")
+        self.p.ejecucion_cantidad, self.p.ejecucion_nota = 15, "a partir de la recepción del anticipo"
+        self.p.save()
+        self.assertEqual(self.p.tiempo_ejecucion, "15 días laborables")
+        entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
+        self.assertContains(self.client.get(self.p.get_absolute_url()),
+                            "15 días laborables, a partir de la recepción del anticipo")
+        from django.template.loader import render_to_string
+
+        from apps.configuracion.models import datos_emisor, tema_proforma
+
+        html = render_to_string("trabajos/proforma_pdf.html", {"p": self.p, "lineas": self.p.lineas.all(),
+                                                                 "empresa": datos_emisor(), "tema": tema_proforma()})
+        self.assertIn("Tiempo de ejecución:</b> 15 días laborables, a partir de la recepción del anticipo", html)
+        self.p.ejecucion_cantidad, self.p.ejecucion_unidad = 1, "SEMANAS"
+        self.assertEqual(self.p.tiempo_ejecucion, "1 semana")
+
     def test_descargar_pdf_carta(self):
         entrar_como(self.client, User.objects.create_user("jefa", password=CLAVE), ADMINISTRADOR)
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[self.p.pk]))

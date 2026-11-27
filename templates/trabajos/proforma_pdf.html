@@ -112,6 +112,7 @@
         {% if p.forma_pago %}<p><b>Forma de pago:</b> {{ p.forma_pago }}</p>{% endif %}
         {% if p.garantia %}<p><b>Garantía:</b> {{ p.garantia }}</p>
           {% if p.garantia_nota %}<p class="pre tenue">{{ p.garantia_nota }}</p>{% endif %}{% endif %}
+        {% if p.tiempo_ejecucion %}<p><b>Tiempo de ejecución:</b> {{ p.tiempo_ejecucion }}{% if p.ejecucion_nota %}, {{ p.ejecucion_nota }}{% endif %}</p>{% endif %}
         <p><b>Validez de la oferta:</b> {{ p.validez_dias }} día{{ p.validez_dias|pluralize }} (hasta el {{ p.valida_hasta|date:"d/m/Y" }})</p>
       </div>
     </td>

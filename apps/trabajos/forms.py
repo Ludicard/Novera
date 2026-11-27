@@ -43,18 +43,21 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
         model = Proforma
         fields = [
             "cliente", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
-            "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales", "notas",
+            "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota",
+            "ejecucion_cantidad", "ejecucion_unidad", "ejecucion_nota", "condiciones_generales", "notas",
         ]
         widgets = {
             "fecha": FECHA,
             "cliente": forms.Select(attrs={"data-buscar": "cliente"}),
             "descripcion": forms.Textarea(attrs={"rows": 2, "placeholder": "Opcional: indicaciones para la orden de trabajo (no sale en el PDF)"}),
             "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
+            "ejecucion_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 15"}),
+            "ejecucion_nota": forms.TextInput(attrs={"placeholder": "Ej.: a partir de la recepción del anticipo"}),
             "garantia_nota": forms.Textarea(attrs={"rows": 2, "placeholder": "Ej.: cubre defectos de instalación y repuestos; no cubre mal uso…"}),
             "condiciones_generales": forms.Textarea(attrs={"rows": 4, "placeholder": "Plazos, alcance, exclusiones, responsabilidades del cliente…"}),
             "notas": forms.Textarea(attrs={"rows": 2}),
         }
-        labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad",
+        labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad", "ejecucion_unidad": "Unidad",
                   "descripcion": "Indicaciones para la orden de trabajo"}
 
     def __init__(self, *args, **kwargs):
@@ -69,7 +72,8 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
             # Para no reescribirlas cada vez: se proponen las de la última proforma
             ultima = Proforma.objects.order_by("-creado").first()
             if ultima:
-                for campo in ("forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales"):
+                for campo in ("forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales",
+                              "ejecucion_unidad", "ejecucion_nota"):
                     self.initial.setdefault(campo, getattr(ultima, campo))
 
 
