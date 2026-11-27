@@ -47,7 +47,8 @@ def proformas(request):
     if estado:
         qs = qs.filter(estado=estado)
     if q:
-        qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q))
+        qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q)
+                       | Q(cliente_provisional__icontains=q))
     orden = request.GET.get("orden", "")
     if orden not in ORDEN_PROFORMAS:
         orden = "-numero"
@@ -78,15 +79,24 @@ def _cliente_inicial(request):
 
 
 def _guardar_proforma(request, proforma=None):
-    """Guardar = solicitar autorización al Manager. Si quien guarda es el Manager, queda autorizada."""
-    form = ProformaForm(request.POST or None, instance=proforma, initial=None if proforma else _cliente_inicial(request))
+    """Guardar = solicitar autorización al Manager. Si quien guarda es el Manager, queda autorizada.
+    Mientras no tenga número también puede guardarse como borrador: sin cliente ni detalle obligatorios."""
+    puede_borrador = proforma is None or proforma.estado == Proforma.Estado.BORRADOR
+    borrador = puede_borrador and request.POST.get("accion") == "borrador"
+    form = ProformaForm(request.POST or None, instance=proforma, initial=None if proforma else _cliente_inicial(request),
+                        borrador=borrador)
     lineas = LineasFormSet(request.POST or None, instance=form.instance, prefix="lineas")
+    if borrador:
+        lineas.min_num, lineas.validate_min = 0, False  # el detalle puede quedar vacío
     if request.method == "POST" and form.is_valid() and lineas.is_valid():
         with transaction.atomic():
             p = form.save(commit=False)
             if not p.pk:
                 p.creado_por = request.user
-            if request.rol == MANAGER:
+            if borrador:
+                p.estado = Proforma.Estado.BORRADOR
+                p.autorizada_por, p.fecha_autorizacion = None, None
+            elif request.rol == MANAGER:
                 p.estado = Proforma.Estado.AUTORIZADA
                 p.autorizada_por, p.fecha_autorizacion = request.user, timezone.now()
             else:
@@ -97,14 +107,17 @@ def _guardar_proforma(request, proforma=None):
             lineas.save()
             p.titulo = p.resumen_desde_lineas()
             p.save(update_fields=["titulo"])
-        if request.rol == MANAGER:
+        if borrador:
+            messages.success(request, "Borrador guardado. Ya puedes descargar la vista previa en PDF; "
+                                      "el número se asigna al solicitar la autorización.")
+        elif request.rol == MANAGER:
             messages.success(request, f"Proforma {p.numero} guardada y autorizada (${p.total:,.2f}).")
         else:
             messages.success(request, f"Proforma {p.numero} enviada al Manager para su autorización (${p.total:,.2f}).")
         return redirect(p)
-    titulo = f"Editar {proforma.numero}" if proforma else "Nueva proforma"
+    titulo = (f"Editar {proforma.numero}" if proforma.numero else "Editar borrador") if proforma else "Nueva proforma"
     return render(request, "trabajos/proforma_form.html", {
-        "form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma,
+        "form": form, "lineas": lineas, "titulo": titulo, "proforma": proforma, "puede_borrador": puede_borrador,
         "campos_datos": ["cliente", "fecha", "validez_dias", "porcentaje_iva"],
         "forma_pago_form": FormaPagoForm(),
     })
@@ -139,8 +152,8 @@ def proforma_estado(request, pk):
     observacion = request.POST.get("observacion", "").strip()
     E = Proforma.Estado
     transiciones = {
-        "autorizar": ({E.POR_AUTORIZAR, E.BORRADOR, E.DEVUELTA}, E.AUTORIZADA),
-        "devolver": ({E.POR_AUTORIZAR, E.BORRADOR, E.AUTORIZADA, E.ENVIADA}, E.DEVUELTA),
+        "autorizar": ({E.POR_AUTORIZAR, E.DEVUELTA}, E.AUTORIZADA),
+        "devolver": ({E.POR_AUTORIZAR, E.AUTORIZADA, E.ENVIADA}, E.DEVUELTA),
         "enviar": ({E.AUTORIZADA}, E.ENVIADA),
         "procesar": ({E.ENVIADA}, E.PROCESADA),
         "generar_orden": ({E.PROCESADA}, E.APROBADA),
@@ -494,19 +507,21 @@ def proforma_pdf(request, pk):
     from apps.configuracion.models import datos_emisor, tema_proforma
 
     p = get_object_or_404(Proforma.objects.select_related("cliente", "creado_por"), pk=pk)
-    if not p.autorizada:
+    vista_previa = p.estado == Proforma.Estado.BORRADOR
+    if not p.autorizada and not vista_previa:
         messages.error(request, "El PDF se puede generar cuando el Manager haya autorizado la proforma.")
         return redirect(p)
     empresa = datos_emisor(request.empresa)
     logo = empresa.get("logo_ruta")
     html = render_to_string("trabajos/proforma_pdf.html", {
         "p": p, "lineas": p.lineas.all(), "empresa": empresa, "tema": tema_proforma(request.empresa),
+        "vista_previa": vista_previa,
         "logo": f"file://{logo}" if logo else None,
         "elaborado_por": (p.creado_por.get_full_name() or p.creado_por.username) if p.creado_por else "",
     })
     pdf = HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
     respuesta = HttpResponse(pdf, content_type="application/pdf")
-    nombre = f"Proforma {p.numero} - {slugify(p.cliente.nombre)[:40]}.pdf"
+    nombre = f"Proforma {'borrador' if vista_previa else p.numero} - {slugify(p.nombre_cliente)[:40]}.pdf"
     disposicion = "inline" if request.GET.get("ver") else "attachment"
     respuesta["Content-Disposition"] = f'{disposicion}; filename="{nombre}"'
     return respuesta

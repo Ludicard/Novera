@@ -36,7 +36,7 @@ def _mosaicos(request):
 
     abiertas = OrdenTrabajo.objects.filter(estado__in=ABIERTAS)
     sin_tecnico = abiertas.filter(tecnicos__isnull=True).count()
-    por_autorizar = Proforma.objects.filter(estado__in=[Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.BORRADOR]).count()
+    por_autorizar = Proforma.objects.filter(estado=Proforma.Estado.POR_AUTORIZAR).count()
     devueltas = Proforma.objects.filter(estado=Proforma.Estado.DEVUELTA).count()
     por_procesar = Proforma.objects.filter(estado=Proforma.Estado.ENVIADA).count()
     listas = Proforma.objects.filter(estado=Proforma.Estado.PROCESADA, orden__isnull=True).count()

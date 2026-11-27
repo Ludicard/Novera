@@ -42,7 +42,7 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
     class Meta:
         model = Proforma
         fields = [
-            "cliente", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
+            "cliente", "cliente_provisional", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
             "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota",
             "ejecucion_cantidad", "ejecucion_unidad", "ejecucion_nota", "condiciones_generales", "notas",
         ]
@@ -53,6 +53,7 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
             "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
             "ejecucion_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 15"}),
             "ejecucion_nota": forms.TextInput(attrs={"placeholder": "Ej.: a partir de la recepción del anticipo"}),
+            "cliente_provisional": forms.TextInput(attrs={"placeholder": "Ej.: Edificio Los Álamos"}),
             "garantia_nota": forms.Textarea(attrs={"rows": 2, "placeholder": "Ej.: cubre defectos de instalación y repuestos; no cubre mal uso…"}),
             "condiciones_generales": forms.Textarea(attrs={"rows": 4, "placeholder": "Plazos, alcance, exclusiones, responsabilidades del cliente…"}),
             "notas": forms.Textarea(attrs={"rows": 2}),
@@ -60,8 +61,14 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
         labels = {"garantia_cantidad": "Garantía (tiempo)", "garantia_unidad": "Unidad", "ejecucion_unidad": "Unidad",
                   "descripcion": "Indicaciones para la orden de trabajo"}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, borrador=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.borrador = borrador
+        # El cliente es obligatorio salvo en borrador; se comprueba en clean() para que el navegador
+        # no impida guardar el borrador.
+        self.fields["cliente"].required = False
+        if self.instance.pk and self.instance.estado != Proforma.Estado.BORRADOR:
+            del self.fields["cliente_provisional"]  # ya tiene número: el cliente tiene que estar registrado
         opciones = list(FormaPago.objects.filter(activa=True).values_list("nombre", flat=True))
         actual = self.instance.forma_pago if self.instance.pk else ""
         if actual and actual not in opciones:
@@ -75,6 +82,13 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
                 for campo in ("forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota", "condiciones_generales",
                               "ejecucion_unidad", "ejecucion_nota"):
                     self.initial.setdefault(campo, getattr(ultima, campo))
+
+
+    def clean(self):
+        datos = super().clean()
+        if not self.borrador and not datos.get("cliente"):
+            self.add_error("cliente", "Elige el cliente. Si aún no está registrado, guarda la proforma como borrador.")
+        return datos
 
 
 class FormaPagoForm(forms.ModelForm):

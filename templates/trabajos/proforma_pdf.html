@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Proforma {{ p.numero }}</title>
+<title>Proforma {{ p.numero|default:"vista previa" }}</title>
 <style>
   @page {
     size: letter;
@@ -71,7 +71,7 @@
     <td class="doc">
       <div class="caja">
         <p class="titulo">PROFORMA</p>
-        <p class="numero">No. {{ p.numero }}</p>
+        {% if vista_previa %}<p class="numero">VISTA PREVIA</p>{% else %}<p class="numero">No. {{ p.numero }}</p>{% endif %}
         <table>
           <tr><td>Fecha de emisión:</td><td>{{ p.fecha|date:"d/m/Y" }}</td></tr>
           <tr><td>Validez:</td><td>{{ p.validez_dias }} día{{ p.validez_dias|pluralize }}</td></tr>
@@ -85,7 +85,7 @@
 
 <div class="caja seccion">
   <table class="cliente">
-    <tr><td class="et">Razón social / Nombres:</td><td colspan="3"><b>{{ p.cliente.nombre }}</b></td></tr>
+    <tr><td class="et">Razón social / Nombres:</td><td colspan="3"><b>{{ p.nombre_cliente }}</b></td></tr>
     <tr><td class="et">{{ p.cliente.tipo_identificacion|default:"RUC / C.I." }}:</td><td>{{ p.cliente.identificacion|default:"—" }}</td>
         <td class="et">Teléfono:</td><td>{{ p.cliente.telefono|default:"—" }}</td></tr>
     <tr><td class="et">Dirección:</td><td>{{ p.cliente.direccion|default:"—" }}</td>

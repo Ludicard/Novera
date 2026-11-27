@@ -1,15 +1,19 @@
 {% extends "base.html" %}{% load novera trabajos %}
-{% block title %}{{ p.numero }}{% endblock %}
+{% block title %}{{ p.etiqueta }}{% endblock %}
 {% block content %}
 <a class="volver no-imprimir" href="{% url 'trabajos:proformas' %}">← Proformas</a>
 <div class="encabezado">
-  <div><span class="tenue">Proforma · {{ p.fecha|date:"d/m/Y" }} · válida hasta {{ p.valida_hasta|date:"d/m/Y" }}</span><h1>{{ p.numero }} {% insignia p %}</h1></div>
+  <div><span class="tenue">Proforma · {{ p.fecha|date:"d/m/Y" }} · válida hasta {{ p.valida_hasta|date:"d/m/Y" }}</span><h1>{% if p.numero %}{{ p.numero }}{% else %}Proforma sin número{% endif %} {% insignia p %}</h1></div>
   <div class="acciones-encabezado no-imprimir">
     {% if p.autorizada %}
     <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}?ver=1" target="_blank" rel="noopener">Ver PDF</a>
     <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}">⤓ Descargar PDF</a>
+    {% elif p.estado == "BORRADOR" %}
+    <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}?ver=1" target="_blank" rel="noopener">Ver vista previa</a>
+    <a class="boton" href="{% url 'trabajos:proforma_pdf' p.pk %}">⤓ Descargar vista previa</a>
+    <a class="boton primario" href="{% url 'trabajos:proforma_editar' p.pk %}">Completar y {% if rol == "manager" %}autorizar{% else %}solicitar autorización{% endif %}</a>
     {% endif %}
-    {% if p.editable %}<a class="boton" href="{% url 'trabajos:proforma_editar' p.pk %}">{% if p.estado == "DEVUELTA" %}Corregir{% else %}Editar{% endif %}</a>{% endif %}
+    {% if p.editable and p.estado != "BORRADOR" %}<a class="boton" href="{% url 'trabajos:proforma_editar' p.pk %}">{% if p.estado == "DEVUELTA" %}Corregir{% else %}Editar{% endif %}</a>{% endif %}
     {% if p.estado == "AUTORIZADA" or p.estado == "ENVIADA" or p.estado == "PROCESADA" %}
     <form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">
       {% csrf_token %}
@@ -28,7 +32,9 @@
   </div>
 </div>
 
-{% if p.estado == "POR_AUTORIZAR" or p.estado == "BORRADOR" %}
+{% if p.estado == "BORRADOR" %}
+  <div class="mensaje">📝 Borrador: todavía no tiene número ni se ha enviado al Manager. Puedes descargar la vista previa en PDF para mostrársela al cliente. Cuando esté lista, pulsa «Completar y {% if rol == "manager" %}autorizar{% else %}solicitar autorización{% endif %}»: ahí recibe su número.</div>
+{% elif p.estado == "POR_AUTORIZAR" %}
   {% if rol == "manager" %}
   <section class="tarjeta autorizacion no-imprimir">
     <h2>Autorización</h2>
@@ -72,7 +78,8 @@
   <section class="tarjeta">
     <h2>Cliente</h2>
     <dl class="datos">
-      <dt>Nombre</dt><dd><a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a></dd>
+      {% if p.cliente %}<dt>Nombre</dt><dd><a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a></dd>
+      {% else %}<dt>Nombre</dt><dd>{{ p.cliente_provisional|default:"Sin cliente" }} <small class="tenue">(no registrado en el sistema)</small></dd>{% endif %}
       {% if p.cliente.identificacion %}<dt>RUC / Cédula</dt><dd>{{ p.cliente.identificacion }}</dd>{% endif %}
       {% if p.cliente.direccion %}<dt>Dirección</dt><dd>{{ p.cliente.direccion }}</dd>{% endif %}
       {% if p.cliente.email %}<dt>Email</dt><dd>{{ p.cliente.email }}</dd>{% endif %}

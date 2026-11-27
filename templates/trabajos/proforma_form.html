@@ -3,7 +3,7 @@
 {% block content %}
 <a class="volver" href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">← Volver</a>
 <div class="encabezado"><div><h1>{{ titulo }}</h1>
-  <span class="tenue">{% if rol == "manager" %}Al guardar quedará autorizada.{% else %}Al guardar se envía al Manager para que la autorice.{% endif %}</span></div></div>
+  <span class="tenue">{% if rol == "manager" %}Al guardar quedará autorizada.{% else %}Al guardar se envía al Manager para que la autorice.{% endif %}{% if puede_borrador %} Si aún faltan datos, guárdala como borrador.{% endif %}</span></div></div>
 {% if proforma.estado == "DEVUELTA" and proforma.observacion_autorizacion %}
 <div class="mensaje warning"><strong>El Manager la devolvió:</strong> {{ proforma.observacion_autorizacion }}</div>
 {% endif %}
@@ -13,6 +13,7 @@
     <h2>Datos</h2>
     <div class="campos campos-doc">
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente %}</div>
+      {% if form.cliente_provisional %}<div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente_provisional %}</div>{% endif %}
       {% include "usuarios/_campo.html" with campo=form.fecha %}
       {% include "usuarios/_campo.html" with campo=form.validez_dias %}
       {% include "usuarios/_campo.html" with campo=form.porcentaje_iva %}
@@ -53,6 +54,7 @@
   </section>
   <div class="acciones">
     <button class="boton primario">{% if rol == "manager" %}Guardar y autorizar{% else %}Solicitar autorización{% endif %}</button>
+    {% if puede_borrador %}<button class="boton" name="accion" value="borrador" formnovalidate>Guardar como borrador</button>{% endif %}
     <a href="{% if proforma %}{{ proforma.get_absolute_url }}{% else %}{% url 'trabajos:proformas' %}{% endif %}">Cancelar</a>
   </div>
 </form>

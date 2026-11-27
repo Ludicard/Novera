@@ -93,10 +93,12 @@ class FormaPago(DeEmpresa):
 class Proforma(DeEmpresa, Auditoria):
     """Flujo: se solicita autorización → el Manager la autoriza (o la devuelve con observaciones) →
     se envía al cliente → el Manager la «procesa» (el cliente la aceptó) → se genera la orden de trabajo.
-    En cualquier momento tras enviarla puede marcarse como rechazada por el cliente."""
+    En cualquier momento tras enviarla puede marcarse como rechazada por el cliente.
+    Antes de todo eso puede guardarse como borrador: sin número, sin datos completos y con PDF de vista previa.
+    El número se asigna al solicitar la autorización."""
 
     class Estado(models.TextChoices):
-        BORRADOR = "BORRADOR", "Borrador"  # solo proformas antiguas
+        BORRADOR = "BORRADOR", "Borrador"
         POR_AUTORIZAR = "POR_AUTORIZAR", "Por autorizar"
         DEVUELTA = "DEVUELTA", "Devuelta para corregir"
         AUTORIZADA = "AUTORIZADA", "Autorizada"
@@ -105,8 +107,12 @@ class Proforma(DeEmpresa, Auditoria):
         APROBADA = "APROBADA", "Con orden de trabajo"
         RECHAZADA = "RECHAZADA", "Rechazada por el cliente"
 
-    numero = models.CharField("Número", max_length=20, editable=False)
-    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas")
+    numero = models.CharField("Número", max_length=20, editable=False, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas", null=True, blank=True)
+    cliente_provisional = models.CharField(
+        "Cliente no registrado", max_length=200, blank=True,
+        help_text="Solo en borradores: el nombre que sale en la vista previa si el cliente aún no está en el sistema.",
+    )
     fecha = models.DateField(default=timezone.localdate)
     validez_dias = models.PositiveSmallIntegerField("Validez (días)", default=15)
     titulo = models.CharField("Resumen", max_length=200, blank=True, help_text="Se toma del detalle de la cotización.")
@@ -139,17 +145,28 @@ class Proforma(DeEmpresa, Auditoria):
 
     class Meta:
         ordering = ["-fecha", "-numero"]
-        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="proforma_numero_unico_por_empresa")]
+        constraints = [models.UniqueConstraint(
+            fields=["empresa", "numero"], condition=~models.Q(numero=""), name="proforma_numero_unico_por_empresa",
+        )]
 
     def __str__(self):
-        return f"{self.numero} · {self.titulo}"
+        return f"{self.etiqueta} · {self.titulo}"
+
+    @property
+    def etiqueta(self):
+        """El número, o «Borrador» mientras no se haya solicitado la autorización."""
+        return self.numero or "Borrador"
+
+    @property
+    def nombre_cliente(self):
+        return self.cliente.nombre if self.cliente else self.cliente_provisional
 
     def get_absolute_url(self):
         return reverse("trabajos:proforma", args=[self.pk])
 
     def save(self, *args, **kwargs):
         self.asignar_empresa()
-        if not self.numero:
+        if not self.numero and self.estado != self.Estado.BORRADOR:
             self.numero = siguiente_numero(Proforma, "PF", self.empresa)
         super().save(*args, **kwargs)
 
@@ -211,7 +228,7 @@ class Proforma(DeEmpresa, Auditoria):
     def resumen_desde_lineas(self):
         """El «trabajo a realizar» ya no se escribe aparte: se toma de la primera línea del detalle."""
         primera = self.lineas.order_by("pk").first()
-        texto = primera.descripcion if primera else f"Cotización para {self.cliente}"
+        texto = primera.descripcion if primera else f"Cotización para {self.nombre_cliente or 'cliente por definir'}"
         n = self.lineas.count()
         if n > 1:
             texto = f"{texto} y {n - 1} ítem{'s' if n > 2 else ''} más"
