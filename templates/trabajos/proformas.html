@@ -11,13 +11,18 @@
 </div>
 <nav class="pestanas">
   {% for clave, nombre, n in pestanas %}
-  <a class="pestana {% if clave == estado %}activa{% endif %}{% if clave == 'POR_AUTORIZAR' and n %} vencida{% endif %}" href="?estado={{ clave }}{% if q %}&q={{ q|urlencode }}{% endif %}"><span>{{ nombre }}</span><b>{{ n }}</b></a>
+  <a class="pestana {% if clave == estado %}activa{% endif %}{% if clave == 'POR_AUTORIZAR' and n %} vencida{% endif %}" href="?estado={{ clave }}{% if q %}&q={{ q|urlencode }}{% endif %}&orden={{ orden }}"><span>{{ nombre }}</span><b>{{ n }}</b></a>
   {% endfor %}
 </nav>
 <form method="get" class="tarjeta barra-busqueda">
   <input type="hidden" name="estado" value="{{ estado }}">
   <div class="busqueda"><span class="lupa" aria-hidden="true">⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Buscar por número, trabajo o cliente…"></div>
   <button class="boton">Buscar</button>
+  <label class="ordenar-por">Ordenar por
+    <select name="orden" onchange="this.form.submit()">
+      {% for clave, nombre in opciones_orden %}<option value="{{ clave }}"{% if clave == orden %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+  </label>
 </form>
 <div class="tarjeta sin-relleno desplazable">
 <table class="lista">

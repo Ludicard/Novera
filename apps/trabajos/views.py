@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -15,6 +17,16 @@ from .forms import FormaPagoForm, InformeForm, LineasFormSet, OrdenForm, Proform
 from .models import FormaPago, Informe, OrdenTrabajo, Proforma, Recurso
 
 GESTION = (ADMINISTRADOR, MANAGER)
+
+# Orden del listado de proformas: clave del parámetro ?orden= → (etiqueta, campos de order_by).
+# Los números son PF-00001…, con ceros a la izquierda, así que ordenar el texto equivale a ordenar el número.
+ORDEN_PROFORMAS = {
+    "-numero": ("Número descendente", ["-numero"]),
+    "numero": ("Número ascendente", ["numero"]),
+    "-fecha": ("Fecha más reciente", ["-fecha", "-numero"]),
+    "fecha": ("Fecha más antigua", ["fecha", "numero"]),
+    "cliente": ("Cliente (A-Z)", ["cliente__nombre", "-numero"]),
+}
 
 
 def _gestiona(request):
@@ -36,6 +48,10 @@ def proformas(request):
         qs = qs.filter(estado=estado)
     if q:
         qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q))
+    orden = request.GET.get("orden", "")
+    if orden not in ORDEN_PROFORMAS:
+        orden = "-numero"
+    qs = qs.order_by(*ORDEN_PROFORMAS[orden][1])
     orden_estados = [Proforma.Estado.POR_AUTORIZAR, Proforma.Estado.DEVUELTA, Proforma.Estado.AUTORIZADA,
                      Proforma.Estado.ENVIADA, Proforma.Estado.PROCESADA, Proforma.Estado.APROBADA, Proforma.Estado.RECHAZADA]
     pestanas = [("", "Todas", sum(conteos.values()))] + [
@@ -44,7 +60,11 @@ def proformas(request):
     if conteos.get(Proforma.Estado.BORRADOR):
         pestanas.append((Proforma.Estado.BORRADOR, "Borrador", conteos[Proforma.Estado.BORRADOR]))
     pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
-    return render(request, "trabajos/proformas.html", {"pagina": pagina, "estado": estado, "q": q, "pestanas": pestanas})
+    filtros = urlencode({k: v for k, v in {"estado": estado, "q": q, "orden": orden}.items() if v})
+    return render(request, "trabajos/proformas.html", {
+        "pagina": pagina, "estado": estado, "q": q, "pestanas": pestanas, "filtros": filtros,
+        "orden": orden, "opciones_orden": [(k, v[0]) for k, v in ORDEN_PROFORMAS.items()],
+    })
 
 
 def _cliente_inicial(request):

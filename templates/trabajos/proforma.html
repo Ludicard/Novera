@@ -24,6 +24,7 @@
     </form>
     {% endif %}
     {% if p.estado == "RECHAZADA" %}<form method="post" action="{% url 'trabajos:proforma_estado' p.pk %}" class="en-linea">{% csrf_token %}<button class="boton" name="accion" value="reabrir">Reabrir</button></form>{% endif %}
+    <a class="boton" href="{% url 'trabajos:proforma_nueva' %}">+ Nueva proforma</a>
   </div>
 </div>
 

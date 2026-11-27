@@ -135,6 +135,20 @@ class ProformasYOrdenesTests(Base):
         r = self.client.get(reverse("trabajos:proformas"))
         self.assertContains(r, "Por autorizar")
 
+    def test_ordenar_listado_y_nueva_desde_el_detalle(self):
+        p1 = self.crear_proforma()
+        p2 = Proforma.objects.create(cliente=self.cliente, fecha=p1.fecha - timedelta(days=3), empresa=p1.empresa)
+        p3 = Proforma.objects.create(cliente=self.cliente, fecha=p1.fecha - timedelta(days=1), empresa=p1.empresa)
+        url = reverse("trabajos:proformas")
+        numeros = lambda orden: [p.numero for p in self.client.get(url, {"orden": orden}).context["pagina"]]
+        self.assertEqual(numeros(""), ["PF-00003", "PF-00002", "PF-00001"])  # por defecto, número descendente
+        self.assertEqual(numeros("numero"), ["PF-00001", "PF-00002", "PF-00003"])
+        self.assertEqual(numeros("-fecha"), [p1.numero, p3.numero, p2.numero])
+        self.assertEqual(numeros("fecha"), [p2.numero, p3.numero, p1.numero])
+        self.assertEqual(numeros("no-existe"), ["PF-00003", "PF-00002", "PF-00001"])
+        self.assertContains(self.client.get(url, {"orden": "numero"}), '<option value="numero" selected>')
+        self.assertContains(self.client.get(p1.get_absolute_url()), f'href="{reverse("trabajos:proforma_nueva")}"')
+
     def test_formas_de_pago(self):
         from apps.trabajos.models import FormaPago
 
