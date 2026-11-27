@@ -42,13 +42,14 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
     class Meta:
         model = Proforma
         fields = [
-            "cliente", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
+            "cliente", "cliente_provisional", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
             "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota",
             "ejecucion_cantidad", "ejecucion_unidad", "ejecucion_nota", "condiciones_generales", "notas",
         ]
         widgets = {
             "fecha": FECHA,
             "cliente": forms.Select(attrs={"data-buscar": "cliente"}),
+            "cliente_provisional": forms.HiddenInput(),
             "descripcion": forms.Textarea(attrs={"rows": 2, "placeholder": "Opcional: indicaciones para la orden de trabajo (no sale en el PDF)"}),
             "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
             "ejecucion_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 15"}),
@@ -66,6 +67,11 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
         # El cliente es obligatorio salvo en borrador; se comprueba en clean() para que el navegador
         # no impida guardar el borrador.
         self.fields["cliente"].required = False
+        if self.instance.pk and self.instance.estado != Proforma.Estado.BORRADOR:
+            del self.fields["cliente_provisional"]  # ya tiene número: el cliente tiene que estar registrado
+        else:
+            # Si lo escrito en el buscador no es un cliente registrado, el texto se guarda en cliente_provisional.
+            self.fields["cliente"].widget.attrs["data-texto-libre"] = self["cliente_provisional"].auto_id
         opciones = list(FormaPago.objects.filter(activa=True).values_list("nombre", flat=True))
         actual = self.instance.forma_pago if self.instance.pk else ""
         if actual and actual not in opciones:
@@ -83,8 +89,13 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
 
     def clean(self):
         datos = super().clean()
-        if not self.borrador and not datos.get("cliente"):
-            self.add_error("cliente", "Elige el cliente. Si aún no está registrado, guarda la proforma como borrador.")
+        if datos.get("cliente"):
+            datos["cliente_provisional"] = ""
+        elif not self.borrador:
+            escrito = datos.get("cliente_provisional")
+            self.add_error("cliente", f"«{escrito}» no está registrado como cliente. Regístralo para solicitar la autorización, "
+                                      "o guarda la proforma como borrador." if escrito else
+                                      "Elige el cliente. Si aún no está registrado, escribe su nombre y guarda la proforma como borrador.")
         return datos
 
 

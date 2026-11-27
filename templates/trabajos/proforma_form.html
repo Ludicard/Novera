@@ -12,7 +12,8 @@
   <section class="tarjeta">
     <h2>Datos</h2>
     <div class="campos campos-doc">
-      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente %}</div>
+      <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente %}
+        {% if form.cliente_provisional %}{{ form.cliente_provisional }}<small class="tenue">¿Aún no está registrado? Escribe su nombre y guarda la proforma como borrador.</small>{% endif %}</div>
       {% include "usuarios/_campo.html" with campo=form.fecha %}
       {% include "usuarios/_campo.html" with campo=form.validez_dias %}
       {% include "usuarios/_campo.html" with campo=form.porcentaje_iva %}

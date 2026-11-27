@@ -112,6 +112,8 @@ class Proforma(DeEmpresa, Auditoria):
 
     numero = models.CharField("Número", max_length=20, editable=False, blank=True)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas", null=True, blank=True)
+    # Solo en borradores: el nombre escrito en el buscador de cliente cuando ese cliente aún no está registrado.
+    cliente_provisional = models.CharField("Cliente no registrado", max_length=200, blank=True)
     fecha = models.DateField(default=timezone.localdate)
     validez_dias = models.PositiveSmallIntegerField("Validez (días)", default=15)
     titulo = models.CharField("Resumen", max_length=200, blank=True, help_text="Se toma del detalle de la cotización.")
@@ -158,8 +160,10 @@ class Proforma(DeEmpresa, Auditoria):
 
     @property
     def nombre_cliente(self):
-        """El nombre del cliente; un borrador sin cliente sale en la vista previa con un nombre genérico."""
-        return self.cliente.nombre if self.cliente else CLIENTE_POR_DEFECTO
+        """El cliente registrado, o el nombre escrito en un borrador, o un nombre genérico."""
+        if self.cliente:
+            return self.cliente.nombre
+        return self.cliente_provisional or CLIENTE_POR_DEFECTO
 
     def get_absolute_url(self):
         return reverse("trabajos:proforma", args=[self.pk])
@@ -228,7 +232,7 @@ class Proforma(DeEmpresa, Auditoria):
     def resumen_desde_lineas(self):
         """El «trabajo a realizar» ya no se escribe aparte: se toma de la primera línea del detalle."""
         primera = self.lineas.order_by("pk").first()
-        texto = primera.descripcion if primera else f"Cotización para {self.cliente or 'cliente por definir'}"
+        texto = primera.descripcion if primera else f"Cotización para {self.cliente or self.cliente_provisional or 'cliente por definir'}"
         n = self.lineas.count()
         if n > 1:
             texto = f"{texto} y {n - 1} ítem{'s' if n > 2 else ''} más"

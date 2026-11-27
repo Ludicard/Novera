@@ -152,20 +152,20 @@ class ProformasYOrdenesTests(Base):
     def test_borrador_sin_cliente_ni_detalle_y_luego_solicitar(self):
         anterior = self.crear_proforma()  # PF-00001
         base = {"fecha": timezone.localdate().isoformat(), "validez_dias": 15, "porcentaje_iva": "15",
-                "accion": "borrador"}
+                "cliente_provisional": "ClientePepe", "accion": "borrador"}
         vacia = {"tipo": "SERVICIO", "descripcion": "", "cantidad": "1", "unidad": "u", "precio_unitario": ""}
         r = self.client.post(reverse("trabajos:proforma_nueva"), {**base, **lineas(vacia)})  # la fila vacía del formulario
         b = Proforma.objects.exclude(pk=anterior.pk).get()
         self.assertRedirects(r, b.get_absolute_url())
-        self.assertEqual((b.estado, b.numero, b.cliente, b.nombre_cliente), ("BORRADOR", "", None, "Cliente"))
+        self.assertEqual((b.estado, b.numero, b.cliente, b.nombre_cliente), ("BORRADOR", "", None, "ClientePepe"))
         # Puede haber varios borradores sin número a la vez
         self.client.post(reverse("trabajos:proforma_nueva"), {**base, **lineas()})
         self.assertEqual(Proforma.objects.filter(numero="").count(), 2)
         # Vista previa en PDF
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[b.pk]))
         self.assertEqual(r["Content-Type"], "application/pdf")
-        self.assertIn("Proforma borrador - cliente.pdf", r["Content-Disposition"])
-        self.assertContains(self.client.get(reverse("trabajos:proformas"), {"estado": "BORRADOR"}), "Sin cliente")
+        self.assertIn("Proforma borrador - clientepepe.pdf", r["Content-Disposition"])
+        self.assertContains(self.client.get(reverse("trabajos:proformas"), {"estado": "BORRADOR"}), "ClientePepe")
         # El Manager no autoriza un borrador directamente
         self.autorizar_como_manager(b)
         b.refresh_from_db()
@@ -174,12 +174,15 @@ class ProformasYOrdenesTests(Base):
         datos = {**base, "accion": ""}
         r = self.client.post(reverse("trabajos:proforma_editar", args=[b.pk]), {**datos, **lineas()})
         self.assertEqual(r.status_code, 200)
-        self.assertIn("cliente", r.context["form"].errors)
+        self.assertIn("«ClientePepe» no está registrado", r.context["form"].errors["cliente"][0])
+        # Sin nombre, el borrador sale como «Cliente»
+        self.client.post(reverse("trabajos:proforma_nueva"), {**base, "cliente_provisional": "", **lineas()})
+        self.assertEqual(Proforma.objects.filter(numero="").order_by("pk").last().nombre_cliente, "Cliente")
         datos["cliente"] = self.cliente.pk
         datos.update(lineas({"tipo": "SERVICIO", "descripcion": "Revisión", "cantidad": "1", "unidad": "u", "precio_unitario": "50"}))
         self.client.post(reverse("trabajos:proforma_editar", args=[b.pk]), datos)
         b.refresh_from_db()
-        self.assertEqual((b.estado, b.numero, b.titulo), ("POR_AUTORIZAR", "PF-00002", "Revisión"))
+        self.assertEqual((b.estado, b.numero, b.titulo, b.cliente_provisional), ("POR_AUTORIZAR", "PF-00002", "Revisión", ""))
         # Ya numerada, no vuelve a borrador
         self.client.post(reverse("trabajos:proforma_editar", args=[b.pk]), {**datos, "accion": "borrador"})
         b.refresh_from_db()

@@ -79,6 +79,7 @@
     <h2>Cliente</h2>
     <dl class="datos">
       {% if p.cliente %}<dt>Nombre</dt><dd><a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a></dd>
+      {% elif p.cliente_provisional %}<dt>Nombre</dt><dd>{{ p.cliente_provisional }} <small class="tenue">(no registrado en el sistema)</small></dd>
       {% else %}<dt>Nombre</dt><dd class="tenue">Sin cliente · en la vista previa sale «{{ p.nombre_cliente }}»</dd>{% endif %}
       {% if p.cliente.identificacion %}<dt>RUC / Cédula</dt><dd>{{ p.cliente.identificacion }}</dd>{% endif %}
       {% if p.cliente.direccion %}<dt>Dirección</dt><dd>{{ p.cliente.direccion }}</dd>{% endif %}

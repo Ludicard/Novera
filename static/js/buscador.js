@@ -1,5 +1,7 @@
 /* Combobox con búsqueda para <select data-buscar>: escribe y aparecen las opciones parecidas
-   (sin importar tildes ni mayúsculas). El <select> original se mantiene oculto y es el que se envía. */
+   (sin importar tildes ni mayúsculas). El <select> original se mantiene oculto y es el que se envía.
+   Con data-texto-libre="<id de un input oculto>", si lo escrito no coincide con ninguna opción se conserva
+   el texto: el <select> queda vacío y el texto va en ese input (p. ej. un cliente aún no registrado). */
 (function () {
   "use strict";
   function normalizar(t) {
@@ -16,7 +18,8 @@
     input.type = "text";
     input.className = "combobox-texto";
     input.autocomplete = "off";
-    input.placeholder = "Escribe para buscar…";
+    var libre = select.dataset.textoLibre ? document.getElementById(select.dataset.textoLibre) : null;
+    input.placeholder = libre ? "Busca un cliente o escribe su nombre…" : "Escribe para buscar…";
     input.setAttribute("role", "combobox");
     input.setAttribute("aria-expanded", "false");
     input.setAttribute("aria-controls", id);
@@ -40,7 +43,18 @@
       var o = select.options[select.selectedIndex];
       return o && o.value ? o.text : "";
     }
-    function sincronizar() { input.value = textoSeleccionado(); }
+    function sincronizar() { input.value = textoSeleccionado() || (libre ? libre.value : ""); }
+
+    // Modo texto libre: lo escrito se queda aunque no sea una opción de la lista.
+    function confirmarTexto() {
+      if (!libre) return;
+      var t = input.value.trim();
+      if (t === textoSeleccionado()) { libre.value = ""; return; }
+      var igual = Array.prototype.find.call(select.options, function (o) { return o.value && normalizar(o.text) === normalizar(t); });
+      select.value = igual ? igual.value : "";
+      libre.value = igual ? "" : t;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
 
     // todas = true al abrir la lista: se ven todas las opciones aunque el campo muestre la elegida;
     // al escribir se filtra por lo escrito.
@@ -86,6 +100,7 @@
       var o = visibles[i];
       if (!o) return;
       select.value = o.value;
+      if (libre) libre.value = "";
       select.dispatchEvent(new Event("change", { bubbles: true }));
       sincronizar();
       cerrar();
@@ -100,7 +115,9 @@
       else if (e.key === "Enter") { if (!lista.hidden && activo >= 0) { e.preventDefault(); elegir(activo); } }
       else if (e.key === "Escape") { cerrar(); sincronizar(); }
     });
-    input.addEventListener("blur", function () { setTimeout(function () { cerrar(); sincronizar(); }, 120); });
+    input.addEventListener("blur", function () { setTimeout(function () { cerrar(); confirmarTexto(); sincronizar(); }, 120); });
+    // Al enviar el formulario (Enter o un botón) el blur aún no se ha procesado: se confirma aquí.
+    if (libre && select.form) select.form.addEventListener("submit", confirmarTexto);
     select.addEventListener("change", sincronizar);  // p. ej. cliente creado desde el diálogo
     if (select.required) input.required = true;
     sincronizar();
