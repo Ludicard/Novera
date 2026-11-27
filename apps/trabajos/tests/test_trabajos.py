@@ -152,20 +152,20 @@ class ProformasYOrdenesTests(Base):
     def test_borrador_sin_cliente_ni_detalle_y_luego_solicitar(self):
         anterior = self.crear_proforma()  # PF-00001
         base = {"fecha": timezone.localdate().isoformat(), "validez_dias": 15, "porcentaje_iva": "15",
-                "cliente_provisional": "Edificio Los Álamos", "accion": "borrador"}
+                "accion": "borrador"}
         vacia = {"tipo": "SERVICIO", "descripcion": "", "cantidad": "1", "unidad": "u", "precio_unitario": ""}
         r = self.client.post(reverse("trabajos:proforma_nueva"), {**base, **lineas(vacia)})  # la fila vacía del formulario
         b = Proforma.objects.exclude(pk=anterior.pk).get()
         self.assertRedirects(r, b.get_absolute_url())
-        self.assertEqual((b.estado, b.numero, b.cliente, b.nombre_cliente), ("BORRADOR", "", None, "Edificio Los Álamos"))
+        self.assertEqual((b.estado, b.numero, b.cliente, b.nombre_cliente), ("BORRADOR", "", None, "Cliente"))
         # Puede haber varios borradores sin número a la vez
         self.client.post(reverse("trabajos:proforma_nueva"), {**base, **lineas()})
         self.assertEqual(Proforma.objects.filter(numero="").count(), 2)
         # Vista previa en PDF
         r = self.client.get(reverse("trabajos:proforma_pdf", args=[b.pk]))
         self.assertEqual(r["Content-Type"], "application/pdf")
-        self.assertIn("Proforma borrador - edificio-los-alamos.pdf", r["Content-Disposition"])
-        self.assertContains(self.client.get(reverse("trabajos:proformas"), {"estado": "BORRADOR"}), "Edificio Los Álamos")
+        self.assertIn("Proforma borrador - cliente.pdf", r["Content-Disposition"])
+        self.assertContains(self.client.get(reverse("trabajos:proformas"), {"estado": "BORRADOR"}), "Sin cliente")
         # El Manager no autoriza un borrador directamente
         self.autorizar_como_manager(b)
         b.refresh_from_db()

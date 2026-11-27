@@ -42,7 +42,7 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
     class Meta:
         model = Proforma
         fields = [
-            "cliente", "cliente_provisional", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
+            "cliente", "fecha", "validez_dias", "porcentaje_iva", "descripcion",
             "forma_pago", "garantia_cantidad", "garantia_unidad", "garantia_nota",
             "ejecucion_cantidad", "ejecucion_unidad", "ejecucion_nota", "condiciones_generales", "notas",
         ]
@@ -53,7 +53,6 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
             "garantia_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 3"}),
             "ejecucion_cantidad": forms.NumberInput(attrs={"min": "0", "placeholder": "Ej.: 15"}),
             "ejecucion_nota": forms.TextInput(attrs={"placeholder": "Ej.: a partir de la recepción del anticipo"}),
-            "cliente_provisional": forms.TextInput(attrs={"placeholder": "Ej.: Edificio Los Álamos"}),
             "garantia_nota": forms.Textarea(attrs={"rows": 2, "placeholder": "Ej.: cubre defectos de instalación y repuestos; no cubre mal uso…"}),
             "condiciones_generales": forms.Textarea(attrs={"rows": 4, "placeholder": "Plazos, alcance, exclusiones, responsabilidades del cliente…"}),
             "notas": forms.Textarea(attrs={"rows": 2}),
@@ -67,8 +66,6 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
         # El cliente es obligatorio salvo en borrador; se comprueba en clean() para que el navegador
         # no impida guardar el borrador.
         self.fields["cliente"].required = False
-        if self.instance.pk and self.instance.estado != Proforma.Estado.BORRADOR:
-            del self.fields["cliente_provisional"]  # ya tiene número: el cliente tiene que estar registrado
         opciones = list(FormaPago.objects.filter(activa=True).values_list("nombre", flat=True))
         actual = self.instance.forma_pago if self.instance.pk else ""
         if actual and actual not in opciones:

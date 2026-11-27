@@ -31,7 +31,7 @@
   {% for p in pagina %}
     <tr>
       <td><a class="numero" href="{{ p.get_absolute_url }}">{% if p.numero %}{{ p.numero }}{% else %}<span class="tenue">Borrador</span>{% endif %}</a></td>
-      <td>{{ p.nombre_cliente|default:"—" }}{% if not p.cliente and p.cliente_provisional %} <small class="tenue">(no registrado)</small>{% endif %}</td>
+      <td>{% if p.cliente %}{{ p.cliente }}{% else %}<span class="tenue">Sin cliente</span>{% endif %}</td>
       <td class="recorte" title="{{ p.titulo }}">{{ p.titulo }}</td>
       <td class="ocultar-movil">{{ p.fecha|date:"d/m/Y" }}</td>
       <td class="num">{{ p.total|dinero }}</td>

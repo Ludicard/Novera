@@ -13,7 +13,6 @@
     <h2>Datos</h2>
     <div class="campos campos-doc">
       <div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente %}</div>
-      {% if form.cliente_provisional %}<div class="campo descripcion">{% include "usuarios/_campo.html" with campo=form.cliente_provisional %}</div>{% endif %}
       {% include "usuarios/_campo.html" with campo=form.fecha %}
       {% include "usuarios/_campo.html" with campo=form.validez_dias %}
       {% include "usuarios/_campo.html" with campo=form.porcentaje_iva %}

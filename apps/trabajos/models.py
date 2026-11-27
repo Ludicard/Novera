@@ -51,6 +51,9 @@ class UnidadTiempo(models.TextChoices):
     ANIOS = "ANIOS", "años"
 
 
+CLIENTE_POR_DEFECTO = "Cliente"  # nombre en la vista previa de un borrador sin cliente
+
+
 class UnidadEjecucion(models.TextChoices):
     DIAS_LABORABLES = "DIAS_LAB", "días laborables"
     DIAS = "DIAS", "días"
@@ -109,10 +112,6 @@ class Proforma(DeEmpresa, Auditoria):
 
     numero = models.CharField("Número", max_length=20, editable=False, blank=True)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="proformas", null=True, blank=True)
-    cliente_provisional = models.CharField(
-        "Cliente no registrado", max_length=200, blank=True,
-        help_text="Solo en borradores: el nombre que sale en la vista previa si el cliente aún no está en el sistema.",
-    )
     fecha = models.DateField(default=timezone.localdate)
     validez_dias = models.PositiveSmallIntegerField("Validez (días)", default=15)
     titulo = models.CharField("Resumen", max_length=200, blank=True, help_text="Se toma del detalle de la cotización.")
@@ -159,7 +158,8 @@ class Proforma(DeEmpresa, Auditoria):
 
     @property
     def nombre_cliente(self):
-        return self.cliente.nombre if self.cliente else self.cliente_provisional
+        """El nombre del cliente; un borrador sin cliente sale en la vista previa con un nombre genérico."""
+        return self.cliente.nombre if self.cliente else CLIENTE_POR_DEFECTO
 
     def get_absolute_url(self):
         return reverse("trabajos:proforma", args=[self.pk])
@@ -228,7 +228,7 @@ class Proforma(DeEmpresa, Auditoria):
     def resumen_desde_lineas(self):
         """El «trabajo a realizar» ya no se escribe aparte: se toma de la primera línea del detalle."""
         primera = self.lineas.order_by("pk").first()
-        texto = primera.descripcion if primera else f"Cotización para {self.nombre_cliente or 'cliente por definir'}"
+        texto = primera.descripcion if primera else f"Cotización para {self.cliente or 'cliente por definir'}"
         n = self.lineas.count()
         if n > 1:
             texto = f"{texto} y {n - 1} ítem{'s' if n > 2 else ''} más"

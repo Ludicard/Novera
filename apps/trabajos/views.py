@@ -47,8 +47,7 @@ def proformas(request):
     if estado:
         qs = qs.filter(estado=estado)
     if q:
-        qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q)
-                       | Q(cliente_provisional__icontains=q))
+        qs = qs.filter(Q(numero__icontains=q) | Q(titulo__icontains=q) | Q(cliente__nombre__icontains=q))
     orden = request.GET.get("orden", "")
     if orden not in ORDEN_PROFORMAS:
         orden = "-numero"
