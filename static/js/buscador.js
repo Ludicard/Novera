@@ -42,8 +42,10 @@
     }
     function sincronizar() { input.value = textoSeleccionado(); }
 
-    function pintar() {
-      var q = normalizar(input.value), palabras = q.split(/\s+/).filter(Boolean);
+    // todas = true al abrir la lista: se ven todas las opciones aunque el campo muestre la elegida;
+    // al escribir se filtra por lo escrito.
+    function pintar(todas) {
+      var q = todas === true ? "" : normalizar(input.value), palabras = q.split(/\s+/).filter(Boolean);
       visibles = Array.prototype.filter.call(select.options, function (o) {
         if (!o.value) return false;
         var t = normalizar(o.text);
@@ -65,7 +67,8 @@
         li.addEventListener("mousedown", function (e) { e.preventDefault(); elegir(i); });
         lista.appendChild(li);
       });
-      activo = visibles.length ? 0 : -1;
+      var elegida = visibles.findIndex(function (o) { return o.value === select.value; });
+      activo = elegida >= 0 ? elegida : (visibles.length ? 0 : -1);
       marcar();
       abrir();
     }
@@ -89,9 +92,10 @@
     }
 
     input.addEventListener("input", pintar);
-    input.addEventListener("focus", function () { input.select(); pintar(); });
+    input.addEventListener("focus", function () { input.select(); pintar(true); });
+    input.addEventListener("click", function () { if (lista.hidden) pintar(true); });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowDown") { e.preventDefault(); if (lista.hidden) pintar(); activo = Math.min(activo + 1, visibles.length - 1); marcar(); }
+      if (e.key === "ArrowDown") { e.preventDefault(); if (lista.hidden) pintar(true); activo = Math.min(activo + 1, visibles.length - 1); marcar(); }
       else if (e.key === "ArrowUp") { e.preventDefault(); activo = Math.max(activo - 1, 0); marcar(); }
       else if (e.key === "Enter") { if (!lista.hidden && activo >= 0) { e.preventDefault(); elegir(activo); } }
       else if (e.key === "Escape") { cerrar(); sincronizar(); }

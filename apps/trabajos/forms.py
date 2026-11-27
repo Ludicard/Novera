@@ -64,6 +64,7 @@ class ProformaForm(ClientesActivosMixin, forms.ModelForm):
         if actual and actual not in opciones:
             opciones.append(actual)  # una forma de pago ya usada que luego se desactivó
         self.fields["forma_pago"].choices = [("", "Elige la forma de pago")] + [(o, o) for o in opciones]
+        self.fields["forma_pago"].widget.attrs["data-buscar"] = "forma_pago"
         if not self.instance.pk:
             # Para no reescribirlas cada vez: se proponen las de la última proforma
             ultima = Proforma.objects.order_by("-creado").first()

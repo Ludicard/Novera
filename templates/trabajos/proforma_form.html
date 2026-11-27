@@ -79,6 +79,7 @@
     var d = await r.json().catch(function () { return { errores: ["No se pudo guardar."] }; });
     if (!r.ok) { err.textContent = (d.errores || []).join(" "); err.hidden = false; return; }
     select.add(new Option(d.nombre, d.nombre, true, true));
+    select.dispatchEvent(new Event("change", { bubbles: true }));  // actualiza el buscador
     dlg.close();
   });
 })();
