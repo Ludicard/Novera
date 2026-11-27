@@ -71,23 +71,6 @@
 (function () {
   var dlg = document.getElementById("dlg-forma-pago"), f = document.getElementById("form-forma-pago");
   var select = document.querySelector('#form-proforma [name="forma_pago"]'), err = document.getElementById("forma-pago-errores");
-
-  // Lista corta: solo las 4 primeras formas de pago y «Otras…», que despliega el resto.
-  var VISIBLES = 4, todas = Array.prototype.filter.call(select.options, function (o) { return o.value; });
-  var otras = null, anterior = select.value;
-  if (todas.length > VISIBLES) {
-    todas.forEach(function (o, i) { if (i >= VISIBLES && !o.selected) o.remove(); });
-    otras = new Option("Otras…", "__otras__");
-    select.add(otras);
-    select.addEventListener("change", function () {
-      if (!otras || select.value !== "__otras__") { anterior = select.value; return; }
-      otras.remove(); otras = null;
-      todas.forEach(function (o) { select.add(o); });  // vuelven todas en su orden original
-      select.value = anterior;
-      try { select.showPicker(); } catch (e) { select.focus(); }
-    });
-  }
-
   document.getElementById("abrir-forma-pago").addEventListener("click", function () { f.reset(); err.hidden = true; dlg.showModal(); f.nombre.focus(); });
   dlg.querySelector("[data-cerrar]").addEventListener("click", function () { dlg.close(); });
   f.addEventListener("submit", async function (e) {
@@ -95,10 +78,7 @@
     var r = await fetch(f.dataset.url, { method: "POST", body: new FormData(f) });
     var d = await r.json().catch(function () { return { errores: ["No se pudo guardar."] }; });
     if (!r.ok) { err.textContent = (d.errores || []).join(" "); err.hidden = false; return; }
-    var nueva = new Option(d.nombre, d.nombre, true, true);
-    select.add(nueva, otras);  // antes de «Otras…» si sigue en la lista
-    todas.push(nueva);
-    anterior = nueva.value;
+    select.add(new Option(d.nombre, d.nombre, true, true));
     dlg.close();
   });
 })();
